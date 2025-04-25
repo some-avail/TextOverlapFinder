@@ -33,9 +33,13 @@ The output contains two parts:
  - the second part shows a representation of the first file where all the matching segments are marked as such, like so: 
 
  unique text-frag of file1
+
  ----overlap start----
+
  matching fragment
+
  ----overlap end -----
+
  following unique frag of file1
 
  etc.
@@ -45,5 +49,6 @@ The output contains two parts:
 ### Future
 
 Future-plans:
+
 - implement a command-structure with options.
 - write results to files.
