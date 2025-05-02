@@ -1,11 +1,17 @@
 # Starting with 2 files to compare for overlapping texts.
 
 
-import strutils, sequtils, algorithm
+import std/[strutils, sequtils, algorithm]
 #import unicode
+#import ../../joshares/jolibs/generic/[g_templates]
 
-var versionfl: float = 0.5
-var last_time_stamp: string = "2025-04-24_22.01"
+var versionfl: float = 0.632
+
+# sporadically updated:
+var last_time_stamp: string = "2025-05-01_20.08"
+
+var wispbo: bool = false
+
 
 type
   Match = object
@@ -19,16 +25,21 @@ proc isWordChar(c: char): bool =
   return c.isAlphaAscii()
 
 proc trimToFullWords(s: string): string =
+  # ai-inspired
+  # working is dubious
+  # the idea is to clip partial words and spaces of the front and the rear
+
+
   var start = 0
   var stop = s.len
 
-  # Trim vooraan als het niet op een woord begint
+  # determine the number of frontal chars to be trimmed (by incrementing)
   while start < s.len and isWordChar(s[start]):
     if start == 0 or not isWordChar(s[start - 1]):
       break
     inc start
 
-  # Trim achteraan als het midden in een woord eindigt
+  # determine the number of rearal chars to be trimmed (by decrementing)
   while stop > 0 and isWordChar(s[stop - 1]):
     if stop == s.len or not isWordChar(s[stop]):
       break
@@ -52,6 +63,7 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
     (because currently the matches are sorted on the a-file order)
   ]#
 
+  var wispbo: bool = false
 
   let n = a.len
   let m = b.len
@@ -77,23 +89,50 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
         dp[i][j] = 0
 
   # Filter: hou alleen langste unieke, niet-overlappende substrings over
-  rawMatches = rawMatches.sortedByIt(-it.length)  # langste eerst
+  rawMatches = rawMatches.sortedByIt(-it.length)  # largest ones get above
   var filtered: seq[Match] = @[]
 
+  # since trimToFullWords appears to work only partially i have disabled the below code
+  # ---------------------------------------------------------
+  #for m in rawMatches:
+  #  # Only add a match if filtered doesnt have allready a larger / equal one in it that 
+  #  # starts at or before the other one (otherwise its a different match)
+  #  if not filtered.anyIt(it.startA <= m.startA and it.startA + it.length >= m.startA + m.length):
+  #    var clean = m
+  #    clean.substring = trimToFullWords(m.substring)
+  #    clean.length = clean.substring.len
+  #    if clean.length >= minLen:
+  #      filtered.add clean
+
+
   for m in rawMatches:
+    # Only add a match if filtered doesnt have allready a larger / equal one in it that 
+    # starts at or before the other one (otherwise its a different match)
     if not filtered.anyIt(it.startA <= m.startA and it.startA + it.length >= m.startA + m.length):
+      filtered.add m
+      #wisp(m.substring)
+
+
+  var updated: seq[Match] = @[]
+  for m in filtered:
+      # trim non-letter characters from the substrings
       var clean = m
       clean.substring = trimToFullWords(m.substring)
       clean.length = clean.substring.len
       if clean.length >= minLen:
-        filtered.add clean
+        updated.add clean
 
-  var unique: seq[Match] = @[]
-  unique = deduplicate(filtered)
-  #filtered = filtered.sortedByIt(it.startA)
-  unique = unique.sortedByIt(it.startA)
+  #var unique: seq[Match] = @[]
+  #unique = deduplicate(updated)
+  ##filtered = filtered.sortedByIt(it.startA)
+  #unique = unique.sortedByIt(it.startA)
+  #return unique
 
-  return unique
+  updated = updated.sortedByIt(it.startA)
+  return updated
+
+
+
 
 
 proc getStringStats(tekst, namest: string): string =
@@ -101,20 +140,20 @@ proc getStringStats(tekst, namest: string): string =
 
   var outst: string
   outst = namest & " (" & tekst[0..40] & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."
+  outst &= "\p-------------------------------------"
 
   result = outst
 
 
-proc markOverlapsInFile(first, secondst: string; minlenghthit: int): string =
+proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: seq[Match]): string =
   #[
-    Insert into the first string overlap-indicators from the overlaps with the second string 
-    and return the new marked-up first string.
+    Insert into the first string overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string.
   ]#
 
   # put the new file in 01.txt
 
-  # call findCommonSubstrings to find the matches
-  let matchsq = findCommonSubstrings(first, secondst, minlenghthit)
+  var wispbo: bool = false
+
 
   var markedst: string = first
 
@@ -127,12 +166,12 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int): string =
 
   var debugbo: bool = false
 
-  if debugbo: echo "matchsq.len = " & $matchsq.len & "\p"
+  if debugbo: echo "matchobsq.len = " & $matchobsq.len & "\p"
 
   var startA_previous: int = 0
   var allsubstringsq: seq[string]
 
-  for matchob in matchsq:
+  for matchob in matchobsq:
 
     cyclit += 1
 
@@ -180,51 +219,62 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int): string =
   # write the original file to some updated name-suffix
 
 
-# =========================================================================
-
-var minLen: int = 20
-echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
-let inputst = readLine(stdin)
-if inputst.len != 0: 
-  minLen = parseInt(inputst)
 
 
-# put the new file in 01.txt
-var 
-  filename1st: string = "01.txt"
-  filename2st: string = "02.txt"
-  file1st, file2st: string
 
-# open file 1 and 2
-file1st = readFile(filename1st)
-file2st = readFile(filename2st)
+proc echoAndSaveResults() = 
+  #[
+    run the program
+  ]#
 
-let matches = findCommonSubstrings(file1st, file2st, minLen)
+  echo "Running Tof " & $versionfl & " ..."
 
-# firstly write the overlaps to a file
-var outputst: string = ""
-
-for match in matches:
-  outputst &= match.substring & "\n\n"
-
-writeFile("overlaps.txt", outputst)
-
-# secondly echo to screen from here
-echo "\n\n"
-echo getStringStats(file1st, "File 01.txt")
-echo getStringStats(file2st, "File 02.txt")
-echo "\n"
-echo "Minimal overlap-length: " & $minLen
+  var minLen: int = 20
+  echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
+  let inputst = readLine(stdin)
+  if inputst.len != 0: 
+    minLen = parseInt(inputst)
 
 
-for match in matches:
-  echo "\n================ Overlap ============================"
-  echo "A-", match.startA, "  L-", match.length, "  B-", match.startB
-  echo "------------------------------------------------------"
-  echo "\"", match.substring, "\""
+  # put the new file in 01.txt
+  var 
+    filename1st: string = "01.txt"
+    filename2st: string = "02.txt"
+    text1st, text2st: string
 
-echo "\p\p*********************************************************************************************************************************"
-echo "*********************************************************************************************************************************\p\p"
+  # open file 1 and 2
+  text1st = readFile(filename1st)
+  text2st = readFile(filename2st)
 
-echo markOverlapsInFile(file1st, file2st, minLen)
+  let matchobsq = findCommonSubstrings(text1st, text2st, minLen)
 
+  ## firstly write the overlaps to a file
+  #var outputst: string = ""
+  #for match in matchobsq:
+  #  outputst &= match.substring & "\n\n"
+  #writeFile("overlaps.txt", outputst)
+
+
+  # secondly echo to screen from here
+  echo "\n\n"
+  echo getStringStats(text1st, "File 01.txt")
+  echo getStringStats(text2st, "File 02.txt")
+  echo "\n"
+  echo "Minimal overlap-length: " & $minLen
+
+
+  for match in matchobsq:
+    echo "\n================ Overlap ============================"
+    echo "A-", match.startA, "  L-", match.length, "  B-", match.startB
+    echo "------------------------------------------------------"
+    echo "\"", match.substring, "\""
+
+  echo "\p\p*********************************************************************************************************************************"
+  echo "*********************************************************************************************************************************\p\p"
+
+  echo markOverlapsInFile(text1st, text2st, minLen, matchobsq)
+
+# ====================================================================================
+
+
+echoAndSaveResults()

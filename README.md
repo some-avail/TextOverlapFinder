@@ -24,25 +24,25 @@ As a starting-app the interface is still limited (0.5).
 ### Output
 
 The output contains two parts:
--  the first part shows the match-data between files:
+- the first part shows the match-data between files:
   - stats:
     - starting-char of the match in the first text
     - length of the match
     - starting-char of the match in the second text
-   - the actual match; a substring (that is like a sentence or paragraph depnding on the minimal length)
- - the second part shows a representation of the first file where all the matching segments are marked as such, like so: 
+  - the actual match; a substring (that is like a sentence or paragraph depnding on the minimal length)
+- the second part shows a representation of the first file where all the matching segments are marked as such, like so: 
 
- unique text-frag of file1
+unique text-frag of file1
 
- ----overlap start----
+----overlap start----
 
- matching fragment
+matching fragment
 
- ----overlap end -----
+----overlap end -----
 
- following unique frag of file1
+following unique frag of file1
 
- etc.
+etc.
 
 
 
