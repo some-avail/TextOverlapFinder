@@ -10,6 +10,15 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 - you can use the program to check for plagiarism.
 
 
+### Installation
+
+- install Nim
+- tof has no custom dependencies
+- compile the with: nim c -d:release tof.nim
+- or compile and run in one pass: nim c -r tof.nim
+- run with: ./tof or ./tof.exe
+- futurally compilates may be delivered.
+
 ### Usage
 
 As a starting-app the interface is still limited (0.5). 
@@ -20,6 +29,8 @@ As a starting-app the interface is still limited (0.5).
 - open a terminal and enter ./tof or ./tof.exe
 - upon running, you must enter the minimal length of strings you want to compare to become matches. (if you enter 3, then the word "the" would become a match, which would not be very usefull). Experiment with different lengths.
 - let the program run.
+
+
 
 ### Output
 
@@ -45,10 +56,13 @@ following unique frag of file1
 etc.
 
 
+### Done
+
+- write results to files.
 
 ### Future
 
 Future-plans:
-
 - implement a command-structure with options.
-- write results to files.
+- deliver executables.
+
