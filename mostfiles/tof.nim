@@ -1,11 +1,13 @@
 # Starting with 2 files to compare for overlapping texts.
 
 
-import std/[strutils, sequtils, algorithm]
+import std/[strutils, sequtils, algorithm, times]
+import std/private/[osdirs,osfiles]
+
 #import unicode
 #import ../../joshares/jolibs/generic/[g_templates]
 
-var versionfl: float = 0.632
+var versionfl: float = 0.65
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-01_20.08"
@@ -19,6 +21,11 @@ type
     startA: int
     startB: int
     length: int
+
+  ConCatStyle = enum
+    ccaNone
+    ccaLineEnding
+
 
 proc isWordChar(c: char): bool =
   #return c.isAlpha()
@@ -92,41 +99,40 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
   rawMatches = rawMatches.sortedByIt(-it.length)  # largest ones get above
   var filtered: seq[Match] = @[]
 
-  # since trimToFullWords appears to work only partially i have disabled the below code
-  # ---------------------------------------------------------
-  #for m in rawMatches:
-  #  # Only add a match if filtered doesnt have allready a larger / equal one in it that 
-  #  # starts at or before the other one (otherwise its a different match)
-  #  if not filtered.anyIt(it.startA <= m.startA and it.startA + it.length >= m.startA + m.length):
-  #    var clean = m
-  #    clean.substring = trimToFullWords(m.substring)
-  #    clean.length = clean.substring.len
-  #    if clean.length >= minLen:
-  #      filtered.add clean
-
 
   for m in rawMatches:
     # Only add a match if filtered doesnt have allready a larger / equal one in it that 
-    # starts at or before the other one (otherwise its a different match)
+    # starts at or before the other one [= full overlap / substring]
     if not filtered.anyIt(it.startA <= m.startA and it.startA + it.length >= m.startA + m.length):
       filtered.add m
       #wisp(m.substring)
 
 
+  # resort on occurence-order
+  filtered = filtered.sortedByIt(it.startA)
+
   var updated: seq[Match] = @[]
+
+  # previous match
+  var prevob: Match
+  var firstpassbo: bool = true
+
+
+  # trim boundaries and remove (partially) overlapping matches
   for m in filtered:
       # trim non-letter characters from the substrings
       var clean = m
       clean.substring = trimToFullWords(m.substring)
       clean.length = clean.substring.len
       if clean.length >= minLen:
-        updated.add clean
-
-  #var unique: seq[Match] = @[]
-  #unique = deduplicate(updated)
-  ##filtered = filtered.sortedByIt(it.startA)
-  #unique = unique.sortedByIt(it.startA)
-  #return unique
+        if firstpassbo:
+          updated.add clean
+          firstpassbo = false
+        else:
+          # no (partially) overlapping matches
+          if clean.startA > (prevob.startA + prevob.length):
+            updated.add clean
+        prevob = clean
 
   updated = updated.sortedByIt(it.startA)
   return updated
@@ -147,7 +153,7 @@ proc getStringStats(tekst, namest: string): string =
 
 proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: seq[Match]): string =
   #[
-    Insert into the first string overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string.
+    Insert into the first string (from file1) overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string (file-text).
   ]#
 
   # put the new file in 01.txt
@@ -168,8 +174,14 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
   if debugbo: echo "matchobsq.len = " & $matchobsq.len & "\p"
 
-  var startA_previous: int = 0
+  var startA_previous: int = -1
   var allsubstringsq: seq[string]
+
+  var notfoundcountit: int = 0
+
+
+  echo "\pInserting matches....\p"
+
 
   for matchob in matchobsq:
 
@@ -179,8 +191,9 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
     # find the subst / index from cur-pos
 
-    #if matchob.startA != startA_previous:   # sometimes multiples because of the other file B
-    if matchob.startA != startA_previous and matchob.substring notin allsubstringsq:
+    if matchob.startA != startA_previous:   # sometimes multiples because of the other file B
+    #if matchob.startA != startA_previous and matchob.substring notin allsubstringsq:  # why is substring uniqueness needed?
+
       curposit = markedst.find(matchob.substring, curposit)
 
       if debugbo: echo "matchob.substring = " & matchob.substring
@@ -188,27 +201,41 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
       if curposit > -1:
         # insert mark overlap-start
-        markedst.insert(overlapstartst, curposit)
+        if curposit < markedst.len:
+          markedst.insert(overlapstartst, curposit)
+        else:
+          echo "overflow"
         # add up overlap-mark and match.len to index-pos and reset the index-pos
         curposit = curposit + overlapstartst.len + matchob.substring.len
         # insert: -----------overlap-end-------------------
-        markedst.insert(overlapsendst, curposit)
+        if curposit < markedst.len:
+          markedst.insert(overlapsendst, curposit)
+        else:
+          echo "overflow"
+
         # update cur-pos
         curposit = curposit + overlapsendst.len
-        allsubstringsq.addunique(matchob.substring)
+        #allsubstringsq.addunique(matchob.substring)
         previousposit = curposit
 
-      else:   # should never happen
-        echo "Could not find match for following data:"
+
+      else:   # should never happen?
+        echo "markOverlapsInFile could not find match for following data:"
         echo "cyclit = " & $cyclit
         echo "matchob.substring = " & matchob.substring
+        echo "matchob.startA = " & $matchob.startA
+        echo "matchob.startB " & $matchob.startB
         echo "curposit = " & $curposit
+        echo "previousposit = " & $previousposit
         echo "\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\p"
+        notfoundcountit += 1
         curposit = previousposit
 
-        result = markedst
-
     startA_previous = matchob.startA
+
+  if notfoundcountit > 0: 
+    echo "\p^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    echo "Matches not found in marking-file: " & $notfoundcountit
 
   if debugbo: echo "\p\p\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\p"
 
@@ -219,15 +246,49 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   # write the original file to some updated name-suffix
 
 
+proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): string = 
+
+  if styleu == ccaNone:
+    result = mainst & addst
+  elif styleu == ccaLineEnding:
+    result = mainst & addst & "\p"
 
 
 
-proc echoAndSaveResults() = 
+proc cleanFilenameStyle(s: string): string =
+  ## Houd alleen letters, cijfers, - en _, en vervang spatiereeksen door één '-'
+  var tmp = ""
+  for c in s:
+    if c.isAlphaNumeric or c in {'-', '_', ' '}:
+      tmp.add(c)
+
+  # Vervang 1 of meer spaties door één streepje
+  result = tmp.multiReplace([("  ", " ")])  # Eerst reduceren naar enkele spaties
+  while "  " in result:
+    result = result.multiReplace([("  ", " ")])  # Herhaal als nodig
+
+  result = result.replace(" ", "-")
+
+proc safeSlice(mainst: string; slicesizeit: int): string =
+  
+  if slicesizeit > 0:
+    if mainst.len >= slicesizeit:
+      result = mainst[0..slicesizeit-1]
+    else:
+      result = mainst
+  else:
+    result = ""
+
+
+proc saveAndEchoResults() = 
   #[
     run the program
   ]#
 
-  echo "Running Tof " & $versionfl & " ..."
+  var overlapst: string = ""
+
+  echo "\pRunning Tof " & $versionfl & " ..."
+
 
   var minLen: int = 20
   echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
@@ -248,33 +309,85 @@ proc echoAndSaveResults() =
 
   let matchobsq = findCommonSubstrings(text1st, text2st, minLen)
 
-  ## firstly write the overlaps to a file
-  #var outputst: string = ""
-  #for match in matchobsq:
-  #  outputst &= match.substring & "\n\n"
-  #writeFile("overlaps.txt", outputst)
-
-
-  # secondly echo to screen from here
-  echo "\n\n"
-  echo getStringStats(text1st, "File 01.txt")
-  echo getStringStats(text2st, "File 02.txt")
-  echo "\n"
-  echo "Minimal overlap-length: " & $minLen
+  echo ""
+  overlapst = ccat("Results for Tof " & $versionfl & ":")
+  overlapst = ccat(overlapst, getStringStats(text1st, "File 01.txt"))
+  overlapst = ccat(overlapst, getStringStats(text2st, "File 02.txt"))
+  overlapst = ccat(overlapst,"")
+  overlapst = ccat(overlapst, "Minimal overlap-length: " & $minLen)
+  overlapst = ccat(overlapst, "match-count = " & $matchobsq.len)
 
 
   for match in matchobsq:
-    echo "\n================ Overlap ============================"
-    echo "A-", match.startA, "  L-", match.length, "  B-", match.startB
-    echo "------------------------------------------------------"
-    echo "\"", match.substring, "\""
+    overlapst = ccat(overlapst & "\n================ Overlap ============================")
+    overlapst = ccat(overlapst & "A-" & $match.startA & "  L-" & $match.length & "  B-" & $match.startB)
+    overlapst = ccat(overlapst, "------------------------------------------------------")
+    overlapst = ccat(overlapst, "\"" & match.substring & "\"")
 
-  echo "\p\p*********************************************************************************************************************************"
-  echo "*********************************************************************************************************************************\p\p"
+  overlapst = ccat(overlapst, "\p\p*********************************************************************************************************************************")
+  overlapst = ccat(overlapst, "*********************************************************************************************************************************\p\p")
 
-  echo markOverlapsInFile(text1st, text2st, minLen, matchobsq)
+  
+  var 
+    compared_01tekst, compared_02tekst: string
+    messagest: string
+    subdirst = "previous_comparisons"
+    filepath_original_01tekst, filepath_original_02tekst: string
+    filepath_overlapst, filepath_compared_01tekst, filepath_compared_02tekst: string
+    timestampst: string
+    firstchars01st, firstchars02st: string
+
+  echo overlapst
+
+  compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq)
+  
+  createDir(subdirst)
+
+  timestampst = format(now(), "yyyyMMdd'_'HHmm")
+
+  firstchars01st = safeSlice(cleanFilenameStyle(text1st), 25)
+  firstchars02st = safeSlice(cleanFilenameStyle(text2st), 25)
+
+  filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
+  filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
+  filepath_overlapst = subdirst & "/" & timestampst & "_matches.txt"
+  filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
+  filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
+
+  copyFile("01.txt", filepath_original_01tekst)
+  copyFile("02.txt", filepath_original_02tekst)
+
+  writeFile(filepath_overlapst, overlapst)
+  writeFile(filepath_compared_01tekst, compared_01tekst)
+
+
+  # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
+  let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen)
+  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq)
+  writeFile(filepath_compared_02tekst, compared_02tekst)
+
+
+  echo compared_01tekst
+
+  messagest = "Files were written to the following subdirectory: " & subdirst
+  echo "##################################################################################"
+  echo messagest
+
 
 # ====================================================================================
 
 
-echoAndSaveResults()
+var testbo: bool = false
+
+if not testbo:
+  saveAndEchoResults()
+
+else:
+  #echo ccat("Running Tof " & $versionfl & " ...", "")
+  #echo ccat("hoofdstreng", " met een staartje", ccaNone)
+  #echo "testing"
+
+  echo cleanFilenameStyle("    aap\n    noot**** mies")
+  echo safeSlice("", 2)
+
+
