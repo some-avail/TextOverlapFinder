@@ -55,6 +55,8 @@ following unique frag of file1
 
 etc.
 
+- furthermore from 0.65 onward, results of the comparison are -besides echoing to screen- written to a subdirectory named: previous_comparisons
+
 
 ### Done
 

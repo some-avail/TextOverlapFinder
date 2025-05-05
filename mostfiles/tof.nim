@@ -10,7 +10,7 @@ import std/private/[osdirs,osfiles]
 var versionfl: float = 0.65
 
 # sporadically updated:
-var last_time_stamp: string = "2025-05-01_20.08"
+var last_time_stamp: string = "2025-05-05_15.50"
 
 var wispbo: bool = false
 
@@ -25,6 +25,10 @@ type
   ConCatStyle = enum
     ccaNone
     ccaLineEnding
+
+  CleanStyle = enum
+    cleanAllButStripes    # remove all white-repetition + replace with stripes
+    cleanSingleWhiteSpace   # remove all white-repetition
 
 
 proc isWordChar(c: char): bool =
@@ -71,15 +75,19 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
   ]#
 
   var wispbo: bool = false
+  echo "starting findCommonSubstrings ..."
 
   let n = a.len
   let m = b.len
+  echo "file 1 has " & $n & " and file 2 has " & $m & " characters..."
+  echo "creating comparison-matrix ..."
 
   # var dp is 2D-sequence of int that contains the incremental length of the 
   # substring under investigation.
   var dp = newSeqWith(n + 1, newSeq[int](m + 1))
   var rawMatches: seq[Match] = @[]
 
+  echo "Starting main comparison - phase 1/3..."
   # string-comparison is done incrementally per letter;
   # if all letters are the same and lenghth > minlen the subst is added to matches 
   for i in 1..n:
@@ -95,10 +103,13 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
       else:
         dp[i][j] = 0
 
+
+
+  echo "post-processing phase 2/3 ..."
+
   # Filter: hou alleen langste unieke, niet-overlappende substrings over
   rawMatches = rawMatches.sortedByIt(-it.length)  # largest ones get above
   var filtered: seq[Match] = @[]
-
 
   for m in rawMatches:
     # Only add a match if filtered doesnt have allready a larger / equal one in it that 
@@ -107,6 +118,7 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
       filtered.add m
       #wisp(m.substring)
 
+  echo "final processing phase 3/3 ..."
 
   # resort on occurence-order
   filtered = filtered.sortedByIt(it.startA)
@@ -134,9 +146,75 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
             updated.add clean
         prevob = clean
 
-  updated = updated.sortedByIt(it.startA)
-  return updated
+  echo "comparison complete!"
 
+  result = updated
+
+
+
+
+proc singularizeSequences(mainst, subst: string): string =
+  # in mainst, replace repeating occs of subst with single occs of the subst
+
+  var tempst, outputst: string
+  tempst = mainst
+
+  # Vervang een reeks van substrings door één substring
+  outputst = tempst.multiReplace([(subst & subst, subst)])  
+  while (subst & subst) in outputst:
+    outputst = outputst.multiReplace([(subst & subst, subst)])  # Herhaal als nodig
+
+  result = outputst
+
+
+
+
+proc cleanFile(mainst: string; cleanStyleu: CleanStyle = cleanAllButStripes): string =
+
+  #[
+    remove unwanted characters from the file and optionally replace them.
+    Select a CleanStyle for what you want.
+      cleanAllButStripes =  Houd alleen letters, cijfers, - en _, en vervang spatiereeksen en regeleindes door één '-'
+  ]#
+
+  var replaced, tempst: string
+  tempst = mainst
+  replaced = tempst.singularizeSequences(" ")
+  tempst = ""
+  replaced = replaced.replace(" \p", "\p")
+  replaced = replaced.singularizeSequences("\p\p")
+  replaced = replaced.replace(" \p", "\p")
+  replaced = replaced.singularizeSequences("\p\p")
+
+  var tmp: string = ""
+
+  if cleanStyleu == cleanAllButStripes:
+    replaced = replaced.replace("\p", "-")
+    replaced = replaced.replace(" ", "-")
+
+    for c in replaced:
+      if c.isAlphaNumeric or c in {'-', '_', ' '}:
+        tmp.add(c)
+
+
+  if cleanStyleu == cleanSingleWhiteSpace:
+    result = replaced
+  else:
+    result = tmp
+
+
+
+
+proc safeSlice(mainst: string; slicesizeit: int): string =
+
+  # one that is independent of size of mainst
+  if slicesizeit > 0:
+    if mainst.len >= slicesizeit:
+      result = mainst[0..slicesizeit-1]
+    else:
+      result = mainst
+  else:
+    result = ""
 
 
 
@@ -145,7 +223,8 @@ proc getStringStats(tekst, namest: string): string =
   # return string-stats of tekst number of lines, words and characters
 
   var outst: string
-  outst = namest & " (" & tekst[0..40] & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."
+  #outst = namest & " (" & tekst[0..40] & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."
+  outst = namest & " (" & safeSlice(cleanFile(tekst), 40) & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."  
   outst &= "\p-------------------------------------"
 
   result = outst
@@ -175,12 +254,11 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   if debugbo: echo "matchobsq.len = " & $matchobsq.len & "\p"
 
   var startA_previous: int = -1
-  var allsubstringsq: seq[string]
 
   var notfoundcountit: int = 0
 
 
-  echo "\pInserting matches....\p"
+  echo "\p\pCreating comparison-file (inserting overlap-indicators)....\p\p"
 
 
   for matchob in matchobsq:
@@ -201,21 +279,14 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
       if curposit > -1:
         # insert mark overlap-start
-        if curposit < markedst.len:
-          markedst.insert(overlapstartst, curposit)
-        else:
-          echo "overflow"
+        markedst.insert(overlapstartst, curposit)
         # add up overlap-mark and match.len to index-pos and reset the index-pos
         curposit = curposit + overlapstartst.len + matchob.substring.len
         # insert: -----------overlap-end-------------------
-        if curposit < markedst.len:
-          markedst.insert(overlapsendst, curposit)
-        else:
-          echo "overflow"
+        markedst.insert(overlapsendst, curposit)
 
         # update cur-pos
         curposit = curposit + overlapsendst.len
-        #allsubstringsq.addunique(matchob.substring)
         previousposit = curposit
 
 
@@ -255,30 +326,6 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
 
 
 
-proc cleanFilenameStyle(s: string): string =
-  ## Houd alleen letters, cijfers, - en _, en vervang spatiereeksen door één '-'
-  var tmp = ""
-  for c in s:
-    if c.isAlphaNumeric or c in {'-', '_', ' '}:
-      tmp.add(c)
-
-  # Vervang 1 of meer spaties door één streepje
-  result = tmp.multiReplace([("  ", " ")])  # Eerst reduceren naar enkele spaties
-  while "  " in result:
-    result = result.multiReplace([("  ", " ")])  # Herhaal als nodig
-
-  result = result.replace(" ", "-")
-
-proc safeSlice(mainst: string; slicesizeit: int): string =
-  
-  if slicesizeit > 0:
-    if mainst.len >= slicesizeit:
-      result = mainst[0..slicesizeit-1]
-    else:
-      result = mainst
-  else:
-    result = ""
-
 
 proc saveAndEchoResults() = 
   #[
@@ -290,7 +337,7 @@ proc saveAndEchoResults() =
   echo "\pRunning Tof " & $versionfl & " ..."
 
 
-  var minLen: int = 20
+  var minLen: int = 15
   echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
   let inputst = readLine(stdin)
   if inputst.len != 0: 
@@ -301,11 +348,27 @@ proc saveAndEchoResults() =
   var 
     filename1st: string = "01.txt"
     filename2st: string = "02.txt"
-    text1st, text2st: string
+    text1st, text2st, tmp1st, tmp2st: string
 
   # open file 1 and 2
-  text1st = readFile(filename1st)
-  text2st = readFile(filename2st)
+  tmp1st = readFile(filename1st)
+  tmp2st = readFile(filename2st)
+
+  #pre-clean the files
+  echo "start pre-cleaning files..."
+  text1st = cleanFile(tmp1st, cleanSingleWhiteSpace)
+  text2st = cleanFile(tmp2st, cleanSingleWhiteSpace)
+
+  #text1st = tmp1st
+  #text2st = tmp2st
+
+  tmp1st = ""
+  tmp2st = ""
+  
+  #echo "writing cleaned files..."
+  #writeFile(filename1st, text1st)
+  #writeFile(filename2st, text2st)
+
 
   let matchobsq = findCommonSubstrings(text1st, text2st, minLen)
 
@@ -345,8 +408,8 @@ proc saveAndEchoResults() =
 
   timestampst = format(now(), "yyyyMMdd'_'HHmm")
 
-  firstchars01st = safeSlice(cleanFilenameStyle(text1st), 25)
-  firstchars02st = safeSlice(cleanFilenameStyle(text2st), 25)
+  firstchars01st = safeSlice(cleanFile(text1st), 25)
+  firstchars02st = safeSlice(cleanFile(text2st), 25)
 
   filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
   filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
@@ -387,7 +450,14 @@ else:
   #echo ccat("hoofdstreng", " met een staartje", ccaNone)
   #echo "testing"
 
-  echo cleanFilenameStyle("    aap\n    noot**** mies")
-  echo safeSlice("", 2)
+  #----------------------
+  #echo cleanFile("    aap\n    noot**** mies")
+  #echo safeSlice("", 2)
+  #-------------------------
+  var st: string = "aap\p\p\p\pneushoorn\p\pnoot"
+  var newst: string = "aap\n\n\n\nneushoorn\n\nnoot"
+  var last: string = readFile("02.txt")
 
+  echo cleanFile(last, cleanSingleWhiteSpace)
+  #echo cleanFile(last, cleanAllButStripes)
 
