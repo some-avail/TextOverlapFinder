@@ -1,13 +1,13 @@
 # Starting with 2 files to compare for overlapping texts.
 
 
-import std/[strutils, sequtils, algorithm, times]
+import std/[strutils, sequtils, algorithm, times, parseopt]
 import std/private/[osdirs,osfiles]
 
 #import unicode
 #import ../../joshares/jolibs/generic/[g_templates]
 
-var versionfl: float = 0.65
+var versionfl: float = 0.66
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -29,6 +29,12 @@ type
   CleanStyle = enum
     cleanAllButStripes    # remove all white-repetition + replace with stripes
     cleanSingleWhiteSpace   # remove all white-repetition
+
+
+  WhichFilesToProcess = enum
+    whFileOne
+    whFileTwo
+    whBothFiles
 
 
 proc isWordChar(c: char): bool =
@@ -248,6 +254,10 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   var previousposit: int = 0
   var overlapstartst: string = "\p======================overlap-start===========================\p"
   var overlapsendst: string =  "\p----------------------overlap-end-----------------------------\p"
+  var shortoverlapboundaryst: string = " **** "
+  var shortoverlapstartst: string = " ~**** "
+  var shortoverlapendst: string = " ****~ "
+
 
   var debugbo: bool = false
 
@@ -256,7 +266,7 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   var startA_previous: int = -1
 
   var notfoundcountit: int = 0
-
+  var boundary_lengthit: int = 40
 
   echo "\p\pCreating comparison-file (inserting overlap-indicators)....\p\p"
 
@@ -279,14 +289,26 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
       if curposit > -1:
         # insert mark overlap-start
-        markedst.insert(overlapstartst, curposit)
-        # add up overlap-mark and match.len to index-pos and reset the index-pos
-        curposit = curposit + overlapstartst.len + matchob.substring.len
-        # insert: -----------overlap-end-------------------
-        markedst.insert(overlapsendst, curposit)
+        if matchob.length < boundary_lengthit:
+          markedst.insert(shortoverlapstartst, curposit)
 
-        # update cur-pos
-        curposit = curposit + overlapsendst.len
+          # add up overlap-mark and match.len to index-pos and reset the index-pos
+          curposit = curposit + shortoverlapstartst.len + matchob.substring.len
+          # insert: -----------overlap-end-------------------
+          markedst.insert(shortoverlapendst, curposit)
+
+          # update cur-pos
+          curposit = curposit + shortoverlapendst.len
+
+        else:
+          markedst.insert(overlapstartst, curposit)
+          # add up overlap-mark and match.len to index-pos and reset the index-pos
+          curposit = curposit + overlapstartst.len + matchob.substring.len
+          # insert: -----------overlap-end-------------------
+          markedst.insert(overlapsendst, curposit)
+
+          # update cur-pos
+          curposit = curposit + overlapsendst.len
         previousposit = curposit
 
 
@@ -327,7 +349,8 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
 
 
 
-proc saveAndEchoResults() = 
+proc saveAndEchoResults(minlenghthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true) = 
+
   #[
     run the program
   ]#
@@ -336,8 +359,8 @@ proc saveAndEchoResults() =
 
   echo "\pRunning Tof " & $versionfl & " ..."
 
-
   var minLen: int = 15
+
   echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
   let inputst = readLine(stdin)
   if inputst.len != 0: 
@@ -364,7 +387,8 @@ proc saveAndEchoResults() =
 
   tmp1st = ""
   tmp2st = ""
-  
+
+  # FOR NOW DONT CHANGE THE ORIGINAL; A CLEANED COPY IS WRITTEN TO previous_comparisons
   #echo "writing cleaned files..."
   #writeFile(filename1st, text1st)
   #writeFile(filename2st, text2st)
@@ -438,6 +462,134 @@ proc saveAndEchoResults() =
 
 
 # ====================================================================================
+
+
+
+proc processCommandLine() = 
+#[
+  firstly load the args from the commandline and set the needed vars 
+  then run the chosen procedures.
+
+  test: string
+]#
+
+
+  var 
+    optob = initOptParser(shortNoVal = {'h'}, longNoVal = @["help"])
+    #----------------------------------
+    projectpathst, procst: string = ""
+    directionst = "usage"
+    depthit: int = 3
+    #----------------------------------
+    lengthit: int = 0
+  
+
+  try:
+
+    # firstly load the args from the commandline and set the needed vars 
+    for kind, key, val in optob.getopt():
+      case kind:
+      of cmdArgument:                       # without hyphen(s); used here for project-definition-file-path
+        #projectpathst = key
+        echo "No command-key required"
+      of cmdShortOption, cmdLongOption:
+        case key:
+        #of "c", "command": 
+        #  case val:
+        #  of "a", "add_files":
+        #    procst = "addSourceFilesToProject"
+        #  of "d", "declarations":
+        #    procst =  "createDeclarationList"
+        #  of "c", "combine":                       # combine multiple projects / dec-lists (later more?)
+        #    procst = "createMultiProjectFiles"
+        #  of "v", "views":
+        #    procst = "createAllViewFiles"
+        #  of "g", "generate_all":                 # both dec-lists and view-files
+        #    procst = "generate_all"
+        #  of "t", "tree":
+        #    procst = "showDeclarationBranch"
+        #  of "s", "sourcecode":
+        #    procst = "showSourceCode"
+        of "l", "length-minimum":
+          if val != "":
+            lengthit = parseInt(val)
+          else:
+            echo "You entered the length-key(-l), but not the value (like: -l:20)."
+
+
+        of "r", "direction":
+          case val:
+          of "u", "usage":
+            directionst = "usage"
+          of "b", "used-by":
+            directionst = "used-by"          
+        #of "d", "depth":
+        #  if val != "":
+        #    depthit = parseInt(val)
+        #  else:
+        #    echo "You entered the depth-key(-d), but not the value (like: -d:2)."
+        of "h", "help":
+          procst = "echoHelpInfo"
+      of cmdEnd: 
+        assert(false) # cannot happen
+
+
+
+    echo "----------------------------------------------------"
+    echo "Thanks for using CodeTwig " & $versionfl
+    echo "Project-path = " & projectpathst
+    echo "Chosen procedure = " & procst
+    echo "For help type: ctwig -h or ctwig --help"
+    echo "----------------------------------------------------"
+
+    if procst != "":
+      if projectpathst != "" or procst == "echoHelpInfo":
+        discard
+
+        #case procst
+        #of "addSourceFilesToProject":
+        #  echo addSourceFilesToProject(projectpathst)
+        #of "createDeclarationList":
+        #  createDeclarationList(projectpathst)
+        #of "createMultiProjectFiles":
+        #  createMultiProjectFiles(projectpathst)
+        #of "createAllViewFiles":
+        #  createAllViewFiles(projectpathst)
+        #of "generate_all":
+        #  generate_all(projectpathst)
+        #of "showDeclarationBranch":
+        #  showDeclarationBranch(projectpathst, directionst, depthit)
+        #of "showSourceCode":
+        #  showSourceCode(projectpathst)
+        #of "echoHelpInfo":
+        #  echoHelpInfo()
+
+      else:
+        echo "A project-file was not provided (like: projects/someproject.pro)"
+    else:
+      echo "A command-option was not provided (like -c=a or -c=t); exiting..."
+
+
+  except IndexDefect:
+    let errob = getCurrentException()
+    echo "\p-----error start-----" 
+    echo "Index-error caused by bug in program"
+    echo "System-error-description:"
+    echo errob.name
+    echo errob.msg
+    echo repr(errob) 
+    echo "----End error-----\p"
+
+    #unanticipated errors come here
+  except:
+    let errob = getCurrentException()
+    echo "\p******* Unanticipated error *******" 
+    echo errob.name
+    echo errob.msg
+    echo repr(errob)
+    echo "\p****End exception****\p"
+
+
 
 
 var testbo: bool = false
