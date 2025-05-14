@@ -1,23 +1,24 @@
 # Starting with 2 files to compare for overlapping texts.
 
 
-import std/[strutils, sequtils, algorithm, times, parseopt]
+import std/[strutils, sequtils, algorithm, times, parseopt, math]
 import std/private/[osdirs,osfiles]
 
 #import unicode
-#import ../../joshares/jolibs/generic/[g_templates]
+import ../../joshares/jolibs/generic/[g_templates]
 
-var versionfl: float = 0.66
+var versionfl: float = 0.6851
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
 
-var wispbo: bool = false
+var wispbo: bool = true
 
 
 type
   Match = object
     substring: string
+    substrB: string
     startA: int
     startB: int
     length: int
@@ -35,6 +36,11 @@ type
     whFileOne
     whFileTwo
     whBothFiles
+
+  Skippings = enum
+    skipNothing
+    skipEchoFileInsertions
+
 
 
 proc isWordChar(c: char): bool =
@@ -69,8 +75,48 @@ proc trimToFullWords(s: string): string =
 
 
 
+proc charMatchScore(first, secondst: string): float =
+  let firstlen = first.len
+  let seclen = secondst.len
+  let lengthmaxit = max(firstlen, seclen)
 
-proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
+  if lengthmaxit == 0:
+    return 1.0  # both strings empty → 100% match
+
+  var matchcountit = 0
+  for indexit in 0 ..< min(firstlen, seclen):
+    if first[indexit] == secondst[indexit]:
+      inc matchcountit
+
+  let scorefl = matchcountit.float / lengthmaxit.float
+  return scorefl
+
+
+
+proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
+  let lengthmaxit = max(first.len, secondst.len)
+
+  if lengthmaxit == 0:
+    result = true  # both strings empty → 100% match
+
+  var matchcountit = 0
+  let lenminit = min(first.len, secondst.len)
+
+  for indexit in 0 ..< lenminit:
+    if first[indexit] == secondst[indexit]:
+      inc matchcountit
+
+  let percentfl = 100 * matchcountit.float / lengthmaxit.float
+  if int(round(percentfl)) >= min_percentit:
+    result = true
+  else:
+    result = false
+
+
+
+
+
+proc findCommonSubstrings(a, b: string; minLen: int; fuzzypercentit: int = 100): seq[Match] =
   #[ 
     - a en b are strings to compare on overlapping substrings.
     - the overlaps will be returned in seq of object Match
@@ -80,7 +126,8 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
     (because currently the matches are sorted on the a-file order)
   ]#
 
-  var wispbo: bool = false
+  var wispbo: bool = true
+  #var debugbo: bool = true
   echo "starting findCommonSubstrings ..."
 
   let n = a.len
@@ -97,17 +144,42 @@ proc findCommonSubstrings(a, b: string; minLen: int): seq[Match] =
   # string-comparison is done incrementally per letter;
   # if all letters are the same and lenghth > minlen the subst is added to matches 
   for i in 1..n:
+    wisp("i = ", $i)
+
     for j in 1..m:
-      if a[i - 1] == b[j - 1]:
+      wisp("j = ", $j)
+
+      if fuzzypercentit == 100:
+        if a[i - 1] == b[j - 1]:      
+          wisp("a[i - 1] = ", $a[i - 1])
+          wisp("b[j - 1] = ", $b[j - 1])
+
+          dp[i][j] = dp[i - 1][j - 1] + 1
+          wisp("dp[i][j] = ", $dp[i][j])
+
+          if dp[i][j] >= minLen:
+            let length = dp[i][j]
+            let startA = i - length
+            let startB = j - length
+            let substr = a[startA ..< i]
+            rawMatches.add Match(substring: substr, startA: startA, startB: startB, length: length)
+        else:
+          dp[i][j] = 0
+
+      else:
+      # ---------- nieuw ---------------
         dp[i][j] = dp[i - 1][j - 1] + 1
-        if dp[i][j] >= minLen:
+        if dp[i][j] >= minLen:     
           let length = dp[i][j]
           let startA = i - length
           let startB = j - length
-          let substr = a[startA ..< i]
-          rawMatches.add Match(substring: substr, startA: startA, startB: startB, length: length)
-      else:
-        dp[i][j] = 0
+          let substringA = a[startA ..< i]
+          let substringB = b[startB ..< j]
+          if fuzzyMatch(substringA, substringB, fuzzypercentit):
+            rawMatches.add Match(substring: substringA, substrB: substringB, startA: startA, startB: startB, length: length)
+          else:
+            dp[i][j] = 0
+
 
 
 
@@ -213,7 +285,9 @@ proc cleanFile(mainst: string; cleanStyleu: CleanStyle = cleanAllButStripes): st
 
 proc safeSlice(mainst: string; slicesizeit: int): string =
 
+  # this concerns a frontal slice
   # one that is independent of size of mainst
+
   if slicesizeit > 0:
     if mainst.len >= slicesizeit:
       result = mainst[0..slicesizeit-1]
@@ -236,7 +310,7 @@ proc getStringStats(tekst, namest: string): string =
   result = outst
 
 
-proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: seq[Match]): string =
+proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: seq[Match]): string =
   #[
     Insert into the first string (from file1) overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string (file-text).
   ]#
@@ -254,7 +328,6 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   var previousposit: int = 0
   var overlapstartst: string = "\p======================overlap-start===========================\p"
   var overlapsendst: string =  "\p----------------------overlap-end-----------------------------\p"
-  var shortoverlapboundaryst: string = " **** "
   var shortoverlapstartst: string = " ~**** "
   var shortoverlapendst: string = " ****~ "
 
@@ -266,7 +339,7 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
   var startA_previous: int = -1
 
   var notfoundcountit: int = 0
-  var boundary_lengthit: int = 40
+  var boundary_lengthit: int = 40    # the boundary defined between short and long overlap-indicators
 
   echo "\p\pCreating comparison-file (inserting overlap-indicators)....\p\p"
 
@@ -334,9 +407,6 @@ proc markOverlapsInFile(first, secondst: string; minlenghthit: int; matchobsq: s
 
   result = markedst
 
-  # later:
-  # write the updated filestring to disk with some suffix
-  # write the original file to some updated name-suffix
 
 
 proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): string = 
@@ -347,24 +417,69 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
     result = mainst & addst & "\p"
 
 
+proc echoHelpInfo() = 
+  echo "Help is not yet implemented..."
 
 
-proc saveAndEchoResults(minlenghthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true) = 
+proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit: int; reversebo: bool = false, fuzzypercentit: int): string = 
+
+  var overlapst: string
+  overlapst = ccat("Results for Tof " & $versionfl & ":")
+  if not reversebo:
+    overlapst = ccat(overlapst, getStringStats(text1st, "File 01.txt"))
+    overlapst = ccat(overlapst, getStringStats(text2st, "File 02.txt"))
+  else:
+    overlapst = ccat(overlapst, getStringStats(text1st, "File 02.txt"))
+    overlapst = ccat(overlapst, getStringStats(text2st, "File 01.txt"))
+
+  overlapst = ccat(overlapst,"")
+  overlapst = ccat(overlapst, "Minimal overlap-length: " & $minlengthit)
+  overlapst = ccat(overlapst, "Accuracy-percentage: " & $fuzzypercentit)
+  overlapst = ccat(overlapst, "match-count = " & $matchobsq.len)
+
+
+  for match in matchobsq:
+    overlapst = ccat(overlapst & "\n================ Overlap ============================")
+    overlapst = ccat(overlapst & "A-" & $match.startA & "  L-" & $match.length & "  B-" & $match.startB)
+    overlapst = ccat(overlapst, "------------------------------------------------------")
+
+    overlapst = ccat(overlapst, "\"" & match.substring & "\"")
+
+    if match.substrB != "":
+      overlapst = ccat(overlapst, "------------------------------------------------------")
+      overlapst = ccat(overlapst, "\"" & match.substrB & "\"")
+
+  overlapst = ccat(overlapst, "\p\p*********************************************************************************************************************************")
+  overlapst = ccat(overlapst, "*********************************************************************************************************************************\p\p")
+
+  result = overlapst
+
+
+
+proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing) = 
 
   #[
     run the program
   ]#
 
-  var overlapst: string = ""
-
-  echo "\pRunning Tof " & $versionfl & " ..."
 
   var minLen: int = 15
-
-  echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
-  let inputst = readLine(stdin)
-  if inputst.len != 0: 
-    minLen = parseInt(inputst)
+  var validbo: bool = false
+  if minLengthit == 0:
+    echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
+    while not validbo:
+      let inputst = readLine(stdin)
+      if inputst.len != 0: 
+        if inputst.all(isDigit):
+          minLen = parseInt(inputst)
+          if minlen < 4:
+            minLen = 4
+            echo "Minimal minimal length = 4; using 4 ..."
+          validbo = true
+      else:
+        break
+  else:
+    minLen = minlengthit
 
 
   # put the new file in 01.txt
@@ -392,39 +507,24 @@ proc saveAndEchoResults(minlenghthit: int = 0; file_to_processeu: WhichFilesToPr
   #echo "writing cleaned files..."
   #writeFile(filename1st, text1st)
   #writeFile(filename2st, text2st)
-
-
-  let matchobsq = findCommonSubstrings(text1st, text2st, minLen)
-
-  echo ""
-  overlapst = ccat("Results for Tof " & $versionfl & ":")
-  overlapst = ccat(overlapst, getStringStats(text1st, "File 01.txt"))
-  overlapst = ccat(overlapst, getStringStats(text2st, "File 02.txt"))
-  overlapst = ccat(overlapst,"")
-  overlapst = ccat(overlapst, "Minimal overlap-length: " & $minLen)
-  overlapst = ccat(overlapst, "match-count = " & $matchobsq.len)
-
-
-  for match in matchobsq:
-    overlapst = ccat(overlapst & "\n================ Overlap ============================")
-    overlapst = ccat(overlapst & "A-" & $match.startA & "  L-" & $match.length & "  B-" & $match.startB)
-    overlapst = ccat(overlapst, "------------------------------------------------------")
-    overlapst = ccat(overlapst, "\"" & match.substring & "\"")
-
-  overlapst = ccat(overlapst, "\p\p*********************************************************************************************************************************")
-  overlapst = ccat(overlapst, "*********************************************************************************************************************************\p\p")
-
   
   var 
     compared_01tekst, compared_02tekst: string
     messagest: string
     subdirst = "previous_comparisons"
     filepath_original_01tekst, filepath_original_02tekst: string
-    filepath_overlapst, filepath_compared_01tekst, filepath_compared_02tekst: string
+    filepath_overlap1st, filepath_overlap2st, filepath_compared_01tekst, filepath_compared_02tekst: string
     timestampst: string
     firstchars01st, firstchars02st: string
+    overlap1st, overlap2st: string = ""
 
-  echo overlapst
+
+  let matchobsq = findCommonSubstrings(text1st, text2st, minLen, fuzzypercentit)
+
+
+  overlap1st = reportOverlap(text1st, text2st, matchobsq, minLen, false, fuzzypercentit)
+  echo ""
+  echo overlap1st
 
   compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq)
   
@@ -432,29 +532,37 @@ proc saveAndEchoResults(minlenghthit: int = 0; file_to_processeu: WhichFilesToPr
 
   timestampst = format(now(), "yyyyMMdd'_'HHmm")
 
-  firstchars01st = safeSlice(cleanFile(text1st), 25)
-  firstchars02st = safeSlice(cleanFile(text2st), 25)
+  firstchars01st = safeSlice(cleanFile(text1st), 50)
+  firstchars02st = safeSlice(cleanFile(text2st), 50)
 
   filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
   filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
-  filepath_overlapst = subdirst & "/" & timestampst & "_matches.txt"
+  filepath_overlap1st = subdirst & "/" & timestampst & "_matches01.txt"
+  filepath_overlap2st = subdirst & "/" & timestampst & "_matches02.txt"
+
   filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
   filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
 
   copyFile("01.txt", filepath_original_01tekst)
   copyFile("02.txt", filepath_original_02tekst)
 
-  writeFile(filepath_overlapst, overlapst)
+  writeFile(filepath_overlap1st, overlap1st)
   writeFile(filepath_compared_01tekst, compared_01tekst)
 
 
   # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
-  let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen)
+  # ? todo: instead reuse the existing one and resort
+  let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
+
+  overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
+  writeFile(filepath_overlap2st, overlap2st)
+
   compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq)
   writeFile(filepath_compared_02tekst, compared_02tekst)
 
+  if not (skippartseu == skipEchoFileInsertions):
+    echo compared_01tekst
 
-  echo compared_01tekst
 
   messagest = "Files were written to the following subdirectory: " & subdirst
   echo "##################################################################################"
@@ -477,52 +585,57 @@ proc processCommandLine() =
   var 
     optob = initOptParser(shortNoVal = {'h'}, longNoVal = @["help"])
     #----------------------------------
-    projectpathst, procst: string = ""
-    directionst = "usage"
-    depthit: int = 3
+    #projectpathst: string = ""
+    procst: string = "saveAndEchoResults"
     #----------------------------------
     lengthit: int = 0
-  
+    fuzzypercentit: int = 100
+    skipeu: Skippings = skipNothing
 
   try:
+    echo "----------------------------------------------------"
+    echo "Thanks for using TextOverlapFinder " & $versionfl
+    #echo "Chosen procedure = " & procst
+    echo "For help type: ./tof -h or ./tof --help"
+    echo "----------------------------------------------------"
+
 
     # firstly load the args from the commandline and set the needed vars 
     for kind, key, val in optob.getopt():
       case kind:
-      of cmdArgument:                       # without hyphen(s); used here for project-definition-file-path
+      of cmdArgument:           # without hyphen(s); not used here
         #projectpathst = key
         echo "No command-key required"
       of cmdShortOption, cmdLongOption:
         case key:
-        #of "c", "command": 
-        #  case val:
-        #  of "a", "add_files":
-        #    procst = "addSourceFilesToProject"
-        #  of "d", "declarations":
-        #    procst =  "createDeclarationList"
-        #  of "c", "combine":                       # combine multiple projects / dec-lists (later more?)
-        #    procst = "createMultiProjectFiles"
-        #  of "v", "views":
-        #    procst = "createAllViewFiles"
-        #  of "g", "generate_all":                 # both dec-lists and view-files
-        #    procst = "generate_all"
-        #  of "t", "tree":
-        #    procst = "showDeclarationBranch"
-        #  of "s", "sourcecode":
-        #    procst = "showSourceCode"
-        of "l", "length-minimum":
-          if val != "":
-            lengthit = parseInt(val)
+        of "a", "accuracy":
+          if val != "" and val.all(isDigit):
+            if parseInt(val) in 20..100:
+              fuzzypercentit = parseInt(val)
+
           else:
-            echo "You entered the length-key(-l), but not the value (like: -l:20)."
+            echo "You entered the accuracy-key(-a), but not a valid value (valid is like: -a:80 that is in range 20-100). accuracy = 100 means no fuzzyness (100 % of the chars must be matching) \pTof will continue with default-accuracy = 100 %..."
 
-
-        of "r", "direction":
+        of "l", "length-minimum":
+          if val != "" and val.all(isDigit):
+            lengthit = parseInt(val)
+            #echo "length has been set!"
+          else:
+            echo "You entered the length-key(-l), but not a valid value (valid is like: -l:20). \pYou can input manually now..."
+        of "s", "skip-part":
           case val:
-          of "u", "usage":
-            directionst = "usage"
-          of "b", "used-by":
-            directionst = "used-by"          
+          of "e", "echo_file_insertions":
+            skipeu = skipEchoFileInsertions
+
+
+
+
+        #of "r", "direction":
+        #  case val:
+        #  of "u", "usage":
+        #    directionst = "usage"
+        #  of "b", "used-by":
+        #    directionst = "used-by"          
         #of "d", "depth":
         #  if val != "":
         #    depthit = parseInt(val)
@@ -535,39 +648,12 @@ proc processCommandLine() =
 
 
 
-    echo "----------------------------------------------------"
-    echo "Thanks for using CodeTwig " & $versionfl
-    echo "Project-path = " & projectpathst
-    echo "Chosen procedure = " & procst
-    echo "For help type: ctwig -h or ctwig --help"
-    echo "----------------------------------------------------"
+    case procst
+    of "saveAndEchoResults":
+      saveAndEchoResults(lengthit, fuzzypercentit = fuzzypercentit, skippartseu = skipeu)
+    of "echoHelpInfo":
+      echoHelpInfo()
 
-    if procst != "":
-      if projectpathst != "" or procst == "echoHelpInfo":
-        discard
-
-        #case procst
-        #of "addSourceFilesToProject":
-        #  echo addSourceFilesToProject(projectpathst)
-        #of "createDeclarationList":
-        #  createDeclarationList(projectpathst)
-        #of "createMultiProjectFiles":
-        #  createMultiProjectFiles(projectpathst)
-        #of "createAllViewFiles":
-        #  createAllViewFiles(projectpathst)
-        #of "generate_all":
-        #  generate_all(projectpathst)
-        #of "showDeclarationBranch":
-        #  showDeclarationBranch(projectpathst, directionst, depthit)
-        #of "showSourceCode":
-        #  showSourceCode(projectpathst)
-        #of "echoHelpInfo":
-        #  echoHelpInfo()
-
-      else:
-        echo "A project-file was not provided (like: projects/someproject.pro)"
-    else:
-      echo "A command-option was not provided (like -c=a or -c=t); exiting..."
 
 
   except IndexDefect:
@@ -595,7 +681,8 @@ proc processCommandLine() =
 var testbo: bool = false
 
 if not testbo:
-  saveAndEchoResults()
+  #saveAndEchoResults()
+  processCommandLine()
 
 else:
   #echo ccat("Running Tof " & $versionfl & " ...", "")
@@ -606,10 +693,17 @@ else:
   #echo cleanFile("    aap\n    noot**** mies")
   #echo safeSlice("", 2)
   #-------------------------
-  var st: string = "aap\p\p\p\pneushoorn\p\pnoot"
-  var newst: string = "aap\n\n\n\nneushoorn\n\nnoot"
-  var last: string = readFile("02.txt")
+  #var st: string = "aap\p\p\p\pneushoorn\p\pnoot"
+  #var newst: string = "aap\n\n\n\nneushoorn\n\nnoot"
+  #var last: string = readFile("02.txt")
 
-  echo cleanFile(last, cleanSingleWhiteSpace)
-  #echo cleanFile(last, cleanAllButStripes)
+  #echo cleanFile(last, cleanSingleWhiteSpace)
+  ##echo cleanFile(last, cleanAllButStripes)
+  #-----------------------------
+
+  #echo $charMatchScore("joop", "sdoglrlsldg")
+  #echo fuzzyMatch("joop", "jaap", 70)
+  #-----------------------------------------
+  echo findCommonSubstrings("xxxschaapyyy", "schaep", 3, 90)
+
 
