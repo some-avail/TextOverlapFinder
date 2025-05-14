@@ -5,9 +5,9 @@ import std/[strutils, sequtils, algorithm, times, parseopt, math]
 import std/private/[osdirs,osfiles]
 
 #import unicode
-import ../../joshares/jolibs/generic/[g_templates]
+import jolibs/generic/[g_templates]
 
-var versionfl: float = 0.6851
+var versionfl: float = 0.6852
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
