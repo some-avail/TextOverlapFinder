@@ -7,7 +7,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 0.6852
+var versionfl: float = 0.69
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -94,6 +94,12 @@ proc charMatchScore(first, secondst: string): float =
 
 
 proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
+
+  #[
+    - Two strings match when the percentage of char-matches > min_percentit
+    - added a penalty if a string has many spaces thru spacemetricfl because short words are usually less interesting
+  ]#
+
   let lengthmaxit = max(first.len, secondst.len)
 
   if lengthmaxit == 0:
@@ -102,16 +108,22 @@ proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
   var matchcountit = 0
   let lenminit = min(first.len, secondst.len)
 
+  var spacecountit: int = 0
+
   for indexit in 0 ..< lenminit:
     if first[indexit] == secondst[indexit]:
       inc matchcountit
+      if first[indexit] == ' ':
+        inc spacecountit
+
+  # the size of the coefficient determines the severeness of the penalty of many spaces / short words
+  var spacemetricfl: float = 1 + 2*(spacecountit / lenminit)
 
   let percentfl = 100 * matchcountit.float / lengthmaxit.float
-  if int(round(percentfl)) >= min_percentit:
+  if int(round(percentfl / spacemetricfl))  >= min_percentit:
     result = true
   else:
     result = false
-
 
 
 
@@ -166,8 +178,7 @@ proc findCommonSubstrings(a, b: string; minLen: int; fuzzypercentit: int = 100):
         else:
           dp[i][j] = 0
 
-      else:
-      # ---------- nieuw ---------------
+      else:   # do fuzzy comparison
         dp[i][j] = dp[i - 1][j - 1] + 1
         if dp[i][j] >= minLen:     
           let length = dp[i][j]

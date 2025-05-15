@@ -7,13 +7,16 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 ### Use-cases
 
 - my primary use-case was to compare two journalistic stories on the same subject to see which parts overlap (are identical) and which are unique to each story.
+- larger overlaps usually point to a common source which both stories have used.
+- in scientific studies generally you can quickly assess the overlapping information, and by that the unique information being the rest.
 - you can use the program to check for plagiarism.
+- from 0.68 onward you can use fuzzy compare. By that you can determine equal forms and subjects (aot equal / common sources). However the fuzzy comparison is still experimental concerning its beta-quality.
 
 
 ### Installation
 
 - install Nim
-- tof has no custom dependencies
+- tof has no external dependencies.
 - compile the with: nim c -d:release tof.nim
 - or compile and run in one pass: nim c -r tof.nim
 - run with: ./tof or ./tof.exe
@@ -21,7 +24,6 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 
 ### Usage
 
-As a starting-app the interface is still limited (0.5). 
 - in the dir where you have placed the executable tof (linux) or tof.exe (windows), you must place the files:
   - 01.txt, and
   - 02.txt
@@ -30,6 +32,18 @@ As a starting-app the interface is still limited (0.5).
 - upon running, you must enter the minimal length of strings you want to compare to become matches. (if you enter 3, then the word "the" would become a match, which would not be very usefull). Experiment with different lengths.
 - let the program run.
 
+### Commands and options
+
+You can run the exec without options, but there are also the follwoing options available:
+
+-a or --accuracy; example -a:80
+When smaller that 100 (%), it uses fuzzy compare (beta-quality). Defaults to 100.
+-l or --length-minimum; example -l:20
+You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
+-s or --skip-part; example -s:e
+
+only one skippable item exists yet: e, or echo_file_insertions
+usefull when you are only interested in the matches to be printed to the screen.
 
 
 ### Output
@@ -61,10 +75,11 @@ etc.
 ### Done
 
 - write results to files.
+- implement a command-structure with options.
+- added fuzzy compare (beta)
 
 ### Future
 
 Future-plans:
-- implement a command-structure with options.
 - deliver executables.
 
