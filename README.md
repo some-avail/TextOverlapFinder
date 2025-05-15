@@ -37,9 +37,13 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 You can run the exec without options, but there are also the follwoing options available:
 
 -a or --accuracy; example -a:80
+
 When smaller that 100 (%), it uses fuzzy compare (beta-quality). Defaults to 100.
+
 -l or --length-minimum; example -l:20
+
 You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
+
 -s or --skip-part; example -s:e
 
 only one skippable item exists yet: e, or echo_file_insertions
