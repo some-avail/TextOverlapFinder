@@ -34,11 +34,20 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 
 ### Commands and options
 
-You can run the exec without options, but there are also the follwoing options available:
+You can run the exec without options, but there are also the following options available:
 
 -a or --accuracy; example -a:80
 
-When smaller that 100 (%), it uses fuzzy compare (beta-quality). Defaults to 100.
+Normally accuracy is 100 % meaning no match-deviations are allowed.
+When smaller that 100 (%), lets say 80 %, only 80 % of the characters must be matching.
+(there are also other factors considered.)
+Thus a fuzzy comparison arises (for now only beta-quality). Defaults to 100.
+
+-b or --boundary_insertion_type; example -b:20
+
+The number indicates the boundary-length between short and long overlap-indicators / mark-ups. 
+In the example, matches smaller than 20 are given small mark-ups, 
+matches larger than 20 are given large mark-ups.
 
 -l or --length-minimum; example -l:20
 

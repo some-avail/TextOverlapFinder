@@ -7,7 +7,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 0.69
+var versionfl: float = 0.70
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -321,16 +321,14 @@ proc getStringStats(tekst, namest: string): string =
   result = outst
 
 
-proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: seq[Match]): string =
+proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: seq[Match], boundary_lengthit: int = 40): string =
   #[
     Insert into the first string (from file1) overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string (file-text).
   ]#
-
+  # the boundary defined between short and long overlap-indicators
   # put the new file in 01.txt
 
   var wispbo: bool = false
-
-
   var markedst: string = first
 
   # set cur-pos = 0
@@ -350,7 +348,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
   var startA_previous: int = -1
 
   var notfoundcountit: int = 0
-  var boundary_lengthit: int = 40    # the boundary defined between short and long overlap-indicators
+  #var boundary_lengthit: int = 40    # the boundary defined between short and long overlap-indicators
 
   echo "\p\pCreating comparison-file (inserting overlap-indicators)....\p\p"
 
@@ -429,7 +427,37 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
 
 
 proc echoHelpInfo() = 
-  echo "Help is not yet implemented..."
+
+  let messagest = """
+
+Just run ./tof or ./tof.exe to start the program.
+To adjust defaults, use one of the below options:
+
+-a or --accuracy; example -a:80
+
+Normally accuracy is 100 % meaning no match-deviations are allowed.
+When smaller that 100 (%), lets say 80 %, only 80 % of the characters must be matching.
+(there are also other factors considered.)
+Thus a fuzzy comparison arises (for now only beta-quality). Defaults to 100.
+
+-b or --boundary_insertion_type; example -b:20
+
+The number indicates the boundary-length between short and long overlap-indicators / mark-ups. 
+In the example, matches smaller than 20 are given small mark-ups, 
+matches larger than 20 are given large mark-ups.
+
+-l or --length-minimum; example -l:20
+
+You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
+
+-s or --skip-part; example -s:e
+
+only one skippable item exists yet: e, or echo_file_insertions
+usefull when you are only interested in the matches to be printed to the screen.
+  """
+
+  echo messagest
+
 
 
 proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit: int; reversebo: bool = false, fuzzypercentit: int): string = 
@@ -467,7 +495,7 @@ proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit:
 
 
 
-proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing) = 
+proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing, boundary_lengthit: int = 40) = 
 
   #[
     run the program
@@ -537,7 +565,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
   echo ""
   echo overlap1st
 
-  compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq)
+  compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit)
   
   createDir(subdirst)
 
@@ -568,7 +596,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
   overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
   writeFile(filepath_overlap2st, overlap2st)
 
-  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq)
+  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
   writeFile(filepath_compared_02tekst, compared_02tekst)
 
   if not (skippartseu == skipEchoFileInsertions):
@@ -602,6 +630,7 @@ proc processCommandLine() =
     lengthit: int = 0
     fuzzypercentit: int = 100
     skipeu: Skippings = skipNothing
+    boundary_lengthit: int = 40
 
   try:
     echo "----------------------------------------------------"
@@ -627,31 +656,25 @@ proc processCommandLine() =
           else:
             echo "You entered the accuracy-key(-a), but not a valid value (valid is like: -a:80 that is in range 20-100). accuracy = 100 means no fuzzyness (100 % of the chars must be matching) \pTof will continue with default-accuracy = 100 %..."
 
+        of "b", "boundary_insertion_type":
+          if val != "" and val.all(isDigit):
+            boundary_lengthit = parseInt(val)
+          else:
+            echo "You entered the boundary-value(-b), but not a valid value (valid is like: -b:20). \pUsing default..."
+
         of "l", "length-minimum":
           if val != "" and val.all(isDigit):
             lengthit = parseInt(val)
             #echo "length has been set!"
           else:
             echo "You entered the length-key(-l), but not a valid value (valid is like: -l:20). \pYou can input manually now..."
+
+
         of "s", "skip-part":
           case val:
           of "e", "echo_file_insertions":
             skipeu = skipEchoFileInsertions
 
-
-
-
-        #of "r", "direction":
-        #  case val:
-        #  of "u", "usage":
-        #    directionst = "usage"
-        #  of "b", "used-by":
-        #    directionst = "used-by"          
-        #of "d", "depth":
-        #  if val != "":
-        #    depthit = parseInt(val)
-        #  else:
-        #    echo "You entered the depth-key(-d), but not the value (like: -d:2)."
         of "h", "help":
           procst = "echoHelpInfo"
       of cmdEnd: 
@@ -661,7 +684,7 @@ proc processCommandLine() =
 
     case procst
     of "saveAndEchoResults":
-      saveAndEchoResults(lengthit, fuzzypercentit = fuzzypercentit, skippartseu = skipeu)
+      saveAndEchoResults(lengthit, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit)
     of "echoHelpInfo":
       echoHelpInfo()
 
