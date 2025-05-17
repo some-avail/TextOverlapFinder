@@ -1,0 +1,39 @@
+# --------------tof-gitignore----------------------
+# to view results enter: git status --ignore
+
+
+
+uitgaves/
+
+
+# below the mostfiles-dir:
+
+# Trick to ignore some files without extensions (compilates)
+# firstly ignore all:
+mostfiles/*
+# Unignore all with extensions and shell-scripts
+!mostfiles/*.*
+!mostfiles/*_sh
+# Unignore all dirs
+!mostfiles/*/
+
+
+mostfiles/jolibs/generic/
+!mostfiles/jolibs/generic/g_templates.nim
+
+
+mostfiles/previous_comparisons/
+*.txt
+!01.txt
+!02.txt
+
+*0.*.nim
+*1.*.nim
+
+
+tof.sublime*
+pakketten/
+
+**.bak
+
+
