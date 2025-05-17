@@ -7,7 +7,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 0.70
+var versionfl: float = 0.703
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -335,7 +335,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
   var cyclit: int = 0
   var curposit: int = 0
   var previousposit: int = 0
-  var overlapstartst: string = "\p======================overlap-start===========================\p"
+  var overlapstartst: string = "\p<br>======================overlap-start===========================\p"
   var overlapsendst: string =  "\p----------------------overlap-end-----------------------------\p"
   var shortoverlapstartst: string = " ~**** "
   var shortoverlapendst: string = " ****~ "
@@ -645,7 +645,8 @@ proc processCommandLine() =
       case kind:
       of cmdArgument:           # without hyphen(s); not used here
         #projectpathst = key
-        echo "No command-key required"
+        echo "/pYou have probably forgotten a hyphen - before your option..."
+        echo "(no command-key (without hyphen) required)/p"
       of cmdShortOption, cmdLongOption:
         case key:
         of "a", "accuracy":
