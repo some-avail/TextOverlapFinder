@@ -8,7 +8,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.901
+var versionfl: float = 1.904
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -32,8 +32,7 @@ type
     bsubst: string      # matching subst in file B (only relevant for fuzzy compare)
     astartit: int       # character-position where the subst starts in file a
     bstartit: int       # character-position where the subst starts in file b
-    alengthit: int      # length of subst in a
-    blengthit: int      # length of subst in b (only relevant for fuzzy compare)
+    lengthit: int      # length of subst in a and b
 
 
 
@@ -46,11 +45,10 @@ type
     asubst: string    # matching subst in file A
     alineit: int      # line-number
     acharit: int      # line-char-position where subst starts
-    alengthit: int    # length of subst
     bsubst: string
     blineit: int
     bcharit: int
-    blengthit: int
+    lengthit: int    # length of subst a and b
 
 
 
@@ -186,80 +184,129 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
   #  asubst: string    # matching subst in file A
   #  alineit: int      # line-number
   #  acharit: int      # line-char-position where subst starts
-  #  alengthit: int    # length of subst
   #  bsubst: string
   #  blineit: int
   #  bcharit: int
-  #  blengthit: int
+  #  lengthit: int
 
 
   var 
     afileob, bfileob: File
     alinelenit, blinelenit: int
     lensq: seq[seq[int]]
+    linematchsq: seq[LineMatch] = @[]
+    lmob: LineMatch
+    alinecountit: int = 0
+    blinecountit: int = 0
+    foundbo: bool = false
 
+  #try:
+  # open the file for reading
+  if open(afileob, afilespathst, fmRead) and open(bfileob, bfilepathst, fmRead):
+    for alinest in afileob.lines:
+      alinecountit += 1
+      #echo alinecountit, "-a- ", alinest
+      blinecountit = 0    # reset
+      alinelenit = alinest.len
 
-  try:
-    echo "Opening files... "
-    # open the file for reading
-    if open(afileob, afilespathst, fmRead) and open(bfileob, bfilespathst, fmRead):
-      for alinest in afileob.lines:
-        for blinest in bfileob.lines:
+      setFilePos(bfileob, 0)
+      for blinest in bfileob.lines:
+        blinecountit += 1
+        #echo blinecountit, "-b- ",blinest
         # check for a substring-match between the lines
         # if a match exists add it to the line-matches
 
-
-        alinelenit = alinest.len
         blinelenit = blinest.len
 
         # var lensq is 2D-sequence of int that contains the incremental length of the 
         # substring under investigation.
         lensq = newSeqWith(alinelenit + 1, newSeq[int](blinelenit + 1))
-        var rawMatches: seq[Match] = @[]
 
-        echo "Starting main comparison - phase 1/3..."
         # string-comparison is done incrementally per letter;
         # if all letters are the same and lenghth > minlen the subst is added to matches 
         for ait in 1..alinelenit:
-          #wisp("ait = ", $ait)
-
           for bit in 1..blinelenit:
-            #wisp("bit = ", $bit)
 
-            if fuzzypercentit == 100:
+            if fuzzypercentit == 100:     # asubst == bsubst
+
               if alinest[ait - 1] == blinest[bit - 1]:      
-                #wisp("alinest[ait - 1] = ", $alinest[ait - 1])
-                #wisp("blinest[bit - 1] = ", $blinest[bit - 1])
 
                 lensq[ait][bit] = lensq[ait - 1][bit - 1] + 1
-                #wisp("lensq[ait][bit] = ", $lensq[ait][bit])
 
-                if lensq[ait][bit] >= minLen:
-                  let length = lensq[ait][bit]
-                  let startA = ait - length
-                  let startB = bit - length
-                  let substr = alinest[startA ..< ait]
-                  rawMatches.add Match(substring: substr, startA: startA, startB: startB, length: length)
+                if lensq[ait][bit] >= minLengthit:
+                  #foundbo = true
+                  lmob = LineMatch()    # reset object
+                  lmob.lengthit = lensq[ait][bit]
+                  lmob.acharit = ait - lmob.lengthit   # starting-point
+                  lmob.alineit = alinecountit
+                  lmob.asubst = alinest[lmob.acharit ..< ait]
+                  lmob.blineit = blinecountit
+                  lmob.bcharit = bit - lmob.lengthit
+                  linematchsq.add lmob
+
               else:
                 lensq[ait][bit] = 0
+                #if foundbo:
+                #  #echo "found ", alinecountit, " ", blinecountit, " ", ait, " ", bit
+                #  linematchsq.add lmob
+                #  #echo "    " & $lmob
+                #  lmob = LineMatch()    # reset object
+                #  foundbo = false
+
 
             else:   # do fuzzy comparison
               lensq[ait][bit] = lensq[ait - 1][bit - 1] + 1
-              if lensq[ait][bit] >= minLen:     
-                let length = lensq[ait][bit]
-                let startA = ait - length
-                let startB = bit - length
-                let substringA = alinest[startA ..< ait]
-                let substringB = blinest[startB ..< bit]
-                if fuzzyMatch(substringA, substringB, fuzzypercentit):
-                  rawMatches.add Match(substring: substringA, substrB: substringB, startA: startA, startB: startB, length: length)
+
+              if lensq[ait][bit] >= minLengthit:                    
+                lmob = LineMatch()    # reset object
+                lmob.lengthit = lensq[ait][bit]
+                lmob.acharit = ait - lmob.lengthit   # starting-point
+                lmob.alineit = alinecountit
+                lmob.asubst = alinest[lmob.acharit ..< ait]
+                lmob.bcharit = bit - lmob.lengthit
+
+                lmob.bsubst = blinest[lmob.bcharit ..< bit]
+                lmob.blineit = blinecountit
+                if fuzzyMatch(lmob.asubst, lmob.bsubst, fuzzypercentit):
+                  linematchsq.add lmob
                 else:
                   lensq[ait][bit] = 0
 
 
 
-proc convertToStringMatches(linematchobsq: seq[LineMatch]): seq[StringMatch] =
+  # Filter: only keep the longest unique, non-overlapping substrings 
+  linematchsq = linematchsq.sortedByIt(-it.lengthit)  # largest ones get above
+  var filtered: seq[LineMatch] = @[]
 
+  for m in linematchsq:
+    # Only add a match if filtered doesnt have allready a larger / equal one in it that 
+    # starts at or before the other one [= full overlap / substring]
+    if not filtered.anyIt(it.alineit == m.alineit and it.acharit <= m.acharit and it.acharit + it.lengthit >= m.acharit + m.lengthit):
+      filtered.add m
+      #wisp(m.substring)
+
+  filtered = filtered.sortedByIt((it.alineit, it.acharit))
+
+  #result = linematchsq
+  result = filtered
+
+
+  #  #unanticipated errors come here
+  #except:
+  #  let errob = getCurrentException()
+  #  echo "\p******* Unanticipated error *******" 
+  #  echo errob.name
+  #  echo errob.msg
+  #  #echo repr(errob) 
+  #  echo "\p****End exception****\p"
+  #finally:
+  #  fileob.close()
+
+
+
+
+proc convertToStringMatches(linematchobsq: seq[LineMatch]): seq[StringMatch] =
+  discard
 
 
 
@@ -848,7 +895,7 @@ proc processCommandLine() =
 
 
 
-var testbo: bool = false
+var testbo: bool = true
 
 if not testbo:
   #saveAndEchoResults()
@@ -874,6 +921,14 @@ else:
   #echo $charMatchScore("joop", "sdoglrlsldg")
   #echo fuzzyMatch("joop", "jaap", 70)
   #-----------------------------------------
-  echo findCommonSubstrings("xxxschaapyyy", "schaep", 3, 90)
+  #echo findCommonSubstrings("xxxschaapyyy", "schaep", 3, 90)
+  #-------------------------------
+  var testsq: seq[LineMatch]
+  echo "\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+  testsq = findLinematches("01.txt","02.txt", 15, 70)
+  echo "===========================================================\p"
+  for x in testsq:
+    echo x
+    echo "-----------------------------------------"
 
 
