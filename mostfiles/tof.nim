@@ -1,13 +1,14 @@
 # Starting with 2 files to compare for overlapping texts.
+# Todo update for large files by implementing a line-based algorithm.
 
 
-import std/[strutils, sequtils, algorithm, times, parseopt, math]
+import std/[strutils, sequtils, algorithm, times, parseopt, math, tables]
 import std/private/[osdirs,osfiles]
 
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 0.703
+var versionfl: float = 1.901
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -22,6 +23,52 @@ type
     startA: int
     startB: int
     length: int
+
+
+
+
+  StringMatch = object      # a common substring found in two compared strings
+    asubst: string      # matching subst in file A
+    bsubst: string      # matching subst in file B (only relevant for fuzzy compare)
+    astartit: int       # character-position where the subst starts in file a
+    bstartit: int       # character-position where the subst starts in file b
+    alengthit: int      # length of subst in a
+    blengthit: int      # length of subst in b (only relevant for fuzzy compare)
+
+
+
+  FileLineData = object   # file-data to convert / calculate linedata to stringdata
+    lineindexit: int   # cumulative index-position at start of line
+    linelenghtit: int    # length of line (including or excluding linebreaks?)
+
+
+  LineMatch = object  # match between to lines of file a and b
+    asubst: string    # matching subst in file A
+    alineit: int      # line-number
+    acharit: int      # line-char-position where subst starts
+    alengthit: int    # length of subst
+    bsubst: string
+    blineit: int
+    bcharit: int
+    blengthit: int
+
+
+
+  #FullMatch = object
+  #  asubst: string
+  #  alinestartit: int
+  #  acharstartit: int
+  #  alineendit: int
+  #  acharendit: int
+  #  bsubst: string
+  #  blinestartit: int
+  #  bcharstartit: int
+  #  blineendit: int
+  #  bcharendit: int
+
+
+
+
 
   ConCatStyle = enum
     ccaNone
@@ -40,6 +87,10 @@ type
   Skippings = enum
     skipNothing
     skipEchoFileInsertions
+
+var 
+  afiledata: Table[int, FileLineData]
+  bfiledata: Table[int, FileLineData]
 
 
 
@@ -97,7 +148,7 @@ proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
 
   #[
     - Two strings match when the percentage of char-matches > min_percentit
-    - added a penalty if a string has many spaces thru spacemetricfl because short words are usually less interesting
+    - added a penalty if a string has many spaces thru spacemetricfl because short words are usually less relevant
   ]#
 
   let lengthmaxit = max(first.len, secondst.len)
@@ -128,12 +179,96 @@ proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
 
 
 
+proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzypercentit: int = 100): seq[LineMatch] = 
+
+
+  #LineMatch = object  # match between to lines of file a and b
+  #  asubst: string    # matching subst in file A
+  #  alineit: int      # line-number
+  #  acharit: int      # line-char-position where subst starts
+  #  alengthit: int    # length of subst
+  #  bsubst: string
+  #  blineit: int
+  #  bcharit: int
+  #  blengthit: int
+
+
+  var 
+    afileob, bfileob: File
+    alinelenit, blinelenit: int
+    lensq: seq[seq[int]]
+
+
+  try:
+    echo "Opening files... "
+    # open the file for reading
+    if open(afileob, afilespathst, fmRead) and open(bfileob, bfilespathst, fmRead):
+      for alinest in afileob.lines:
+        for blinest in bfileob.lines:
+        # check for a substring-match between the lines
+        # if a match exists add it to the line-matches
+
+
+        alinelenit = alinest.len
+        blinelenit = blinest.len
+
+        # var lensq is 2D-sequence of int that contains the incremental length of the 
+        # substring under investigation.
+        lensq = newSeqWith(alinelenit + 1, newSeq[int](blinelenit + 1))
+        var rawMatches: seq[Match] = @[]
+
+        echo "Starting main comparison - phase 1/3..."
+        # string-comparison is done incrementally per letter;
+        # if all letters are the same and lenghth > minlen the subst is added to matches 
+        for ait in 1..alinelenit:
+          #wisp("ait = ", $ait)
+
+          for bit in 1..blinelenit:
+            #wisp("bit = ", $bit)
+
+            if fuzzypercentit == 100:
+              if alinest[ait - 1] == blinest[bit - 1]:      
+                #wisp("alinest[ait - 1] = ", $alinest[ait - 1])
+                #wisp("blinest[bit - 1] = ", $blinest[bit - 1])
+
+                lensq[ait][bit] = lensq[ait - 1][bit - 1] + 1
+                #wisp("lensq[ait][bit] = ", $lensq[ait][bit])
+
+                if lensq[ait][bit] >= minLen:
+                  let length = lensq[ait][bit]
+                  let startA = ait - length
+                  let startB = bit - length
+                  let substr = alinest[startA ..< ait]
+                  rawMatches.add Match(substring: substr, startA: startA, startB: startB, length: length)
+              else:
+                lensq[ait][bit] = 0
+
+            else:   # do fuzzy comparison
+              lensq[ait][bit] = lensq[ait - 1][bit - 1] + 1
+              if lensq[ait][bit] >= minLen:     
+                let length = lensq[ait][bit]
+                let startA = ait - length
+                let startB = bit - length
+                let substringA = alinest[startA ..< ait]
+                let substringB = blinest[startB ..< bit]
+                if fuzzyMatch(substringA, substringB, fuzzypercentit):
+                  rawMatches.add Match(substring: substringA, substrB: substringB, startA: startA, startB: startB, length: length)
+                else:
+                  lensq[ait][bit] = 0
+
+
+
+proc convertToStringMatches(linematchobsq: seq[LineMatch]): seq[StringMatch] =
+
+
+
+
 proc findCommonSubstrings(a, b: string; minLen: int; fuzzypercentit: int = 100): seq[Match] =
   #[ 
     - a en b are strings to compare on overlapping substrings.
     - the overlaps will be returned in seq of object Match
     - minLen is the minimal length for string to be added to the matches
-    (>15 or 30 recommended; "the" or "have" are not very interesting overlaps)
+    (>15 or 30 recommended; "the" or "have" are not very relevant overlaps)
     - for now a is the new file you want to review
     (because currently the matches are sorted on the a-file order)
   ]#
@@ -630,7 +765,7 @@ proc processCommandLine() =
     lengthit: int = 0
     fuzzypercentit: int = 100
     skipeu: Skippings = skipNothing
-    boundary_lengthit: int = 40
+    boundary_lengthit: int = 30
 
   try:
     echo "----------------------------------------------------"
