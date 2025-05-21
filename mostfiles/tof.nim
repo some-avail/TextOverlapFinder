@@ -8,7 +8,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.904
+var versionfl: float = 1.906
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -23,9 +23,6 @@ type
     startA: int
     startB: int
     length: int
-
-
-
 
   StringMatch = object      # a common substring found in two compared strings
     asubst: string      # matching subst in file A
@@ -49,7 +46,8 @@ type
     blineit: int
     bcharit: int
     lengthit: int    # length of subst a and b
-
+    is_continuation_frombo: bool  # is continuation from previous line-match
+    continues_to_lineit: int    # the match continues until this line
 
 
   #FullMatch = object
@@ -202,6 +200,8 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
 
   #try:
   # open the file for reading
+  echo "Finding line-matches.."
+
   if open(afileob, afilespathst, fmRead) and open(bfileob, bfilepathst, fmRead):
     for alinest in afileob.lines:
       alinecountit += 1
@@ -305,8 +305,158 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
 
 
 
-proc convertToStringMatches(linematchobsq: seq[LineMatch]): seq[StringMatch] =
-  discard
+proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfilepathst: string): seq[StringMatch] =
+
+  #[ 
+  convert the linematches to string-matches
+
+  ADAP FUT:
+  - extend bsubst for overflows as well
+
+  ]#
+  
+
+  var 
+    #overflowtonextbo, overflowfrompreviousbo: bool = false
+    sob: StringMatch
+    sobsq: seq[StringMatch]
+    afiledatatb: Table[int, FileLineData]
+    bfiledatatb: Table[int, FileLineData]
+    afileob, bfileob: File
+    alinecountit, blinecountit: int = 0
+    previousindexit: int = 0
+
+    # temporary vars
+    #asubst, bsubst: string
+    #lengthit: int
+    additionst: string
+    bfilest: string
+    alinelenghtit: int = -1
+
+
+  echo "Converting matches..."
+  # open the file for reading and create tables with file-data
+  if open(afileob, afilespathst, fmRead) and open(bfileob, bfilepathst, fmRead):
+    for alinest in afileob.lines:
+      alinecountit += 1
+      afiledatatb[alinecountit] = FileLineData(lineindexit: previousindexit, linelenghtit: alinest.len)
+      previousindexit += alinest.len + "\p".len
+
+    previousindexit = 0   # reset
+    for blinest in bfileob.lines:
+      blinecountit += 1
+      bfiledatatb[blinecountit] = FileLineData(lineindexit: previousindexit, linelenghtit: blinest.len)
+      previousindexit += blinest.len + "\p".len
+
+    bfilest = readFile(afilespathst)
+
+
+
+  # determine match-continuations to following lines
+  for lmob in mitems(linematchsq):
+    lmob.continues_to_lineit = 0    # preset; 
+    alinelenghtit = afiledatatb[lmob.alineit].linelenghtit
+
+    # handle per case
+    # match stops before end-of-line (eol)
+    if lmob.acharit + lmob.lengthit < alinelenghtit:
+      lmob.continues_to_lineit = -1
+
+      if lmob.acharit > 0:    # line-local match:
+        lmob.is_continuation_frombo = false
+
+    # match goes on till eol (end-of-line)
+    # match may overflow to next line
+    elif lmob.acharit + lmob.lengthit == alinelenghtit:
+
+      # get continuation-info
+      for seclmob in linematchsq:
+
+        if seclmob.alineit > lmob.alineit:
+
+          if lmob.acharit == 0:
+            lmob.continues_to_lineit = seclmob.alineit
+            lmob.is_continuation_frombo = true
+          elif lmob.acharit > 0:
+            if lmob.continues_to_lineit == 0:
+              lmob.continues_to_lineit = -1
+            break
+          else:
+            echo "negative char-starting-points should not happen..."
+
+          if seclmob.acharit + seclmob.lengthit < alinelenghtit:
+            break
+
+    else:   # match would extend beyond line-break
+      echo "Match should not extend beyond line-break..."
+      wisp("should not happen...")
+
+
+  # actual conversion of matches
+
+  for lmob in linematchsq:
+    
+    if lmob.is_continuation_frombo:
+      discard
+      # skip because it is added to another one
+
+    else:     # if not lmob.is_continuation_frombo:
+
+
+      if lmob.continues_to_lineit == -1:
+        sob = StringMatch()
+        sob.asubst = lmob.asubst
+        sob.bsubst = lmob.bsubst
+        sob.astartit = afiledatatb[lmob.alineit].lineindexit + lmob.acharit
+        sob.bstartit = bfiledatatb[lmob.blineit].lineindexit + lmob.bcharit
+        sob.lengthit = lmob.lengthit
+
+        sobsq.add(sob)
+
+      elif lmob.continues_to_lineit == 0:
+        echo "lmob.continues_to_lineit should not be zero..."
+
+      else:   # lmob.continues_to_lineit > 0
+        additionst = ""
+
+        for seclmob in linematchsq:
+
+          if seclmob.alineit > lmob.alineit and seclmob.alineit <= seclmob.continues_to_lineit:
+            additionst &= seclmob.asubst & "\p"
+
+        sob = StringMatch()
+        sob.asubst = lmob.asubst & additionst
+        sob.astartit = afiledatatb[lmob.alineit].lineindexit + lmob.acharit
+        sob.bstartit = bfiledatatb[lmob.blineit].lineindexit + lmob.bcharit
+        sob.lengthit = sob.asubst.len
+        sob.bsubst = bfilest[sob.bstartit .. sob.bstartit + sob.lengthit]
+
+        sobsq.add(sob)
+
+
+
+  sobsq = sobsq.sortedByIt(it.astartit)
+
+  result = sobsq
+
+
+proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] = 
+
+  var 
+    mobsq: seq[Match]
+    mob: Match
+  
+  echo "backporting ..."
+  for sob in sobsq:
+    mob.substring = sob.asubst
+    mob.substrB = sob.bsubst
+    mob.startA = sob.astartit
+    mob.startB = sob.bstartit
+    mob.length = sob.lengthit
+
+    mobsq.add(mob)
+
+  result = mobsq
 
 
 
@@ -740,7 +890,11 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     overlap1st, overlap2st: string = ""
 
 
-  let matchobsq = findCommonSubstrings(text1st, text2st, minLen, fuzzypercentit)
+  #let matchobsq = findCommonSubstrings(text1st, text2st, minLen, fuzzypercentit)
+
+  var lmobsq: seq[LineMatch]
+  lmobsq = findLinematches(filename1st, filename2st, minLen, fuzzypercentit)
+  let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st))
 
 
   overlap1st = reportOverlap(text1st, text2st, matchobsq, minLen, false, fuzzypercentit)
@@ -771,15 +925,15 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
   writeFile(filepath_compared_01tekst, compared_01tekst)
 
 
-  # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
-  # ? todo: instead reuse the existing one and resort
-  let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
+  ## for the reverse comparison (1 and 2 swapped) also the matching must be rerun
+  ## ? todo: instead reuse the existing one and resort
+  #let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
 
-  overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
-  writeFile(filepath_overlap2st, overlap2st)
+  #overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
+  #writeFile(filepath_overlap2st, overlap2st)
 
-  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
-  writeFile(filepath_compared_02tekst, compared_02tekst)
+  #compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
+  #writeFile(filepath_compared_02tekst, compared_02tekst)
 
   if not (skippartseu == skipEchoFileInsertions):
     echo compared_01tekst
@@ -895,7 +1049,7 @@ proc processCommandLine() =
 
 
 
-var testbo: bool = true
+var testbo: bool = false
 
 if not testbo:
   #saveAndEchoResults()
@@ -930,5 +1084,7 @@ else:
   for x in testsq:
     echo x
     echo "-----------------------------------------"
+
+  echo convertToStringMatches(testsq, "01.txt","02.txt")
 
 
