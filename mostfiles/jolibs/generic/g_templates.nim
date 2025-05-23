@@ -3,7 +3,7 @@ import std/[times, strutils]
 var versionfl: float = 0.13
 
 
-var wispbo* = false
+var wispbo* = true
 
 
 

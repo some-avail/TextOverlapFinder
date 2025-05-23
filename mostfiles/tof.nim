@@ -8,12 +8,12 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.906
+var versionfl: float = 1.91
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
 
-var wispbo: bool = true
+#wispbo: bool = true
 
 
 type
@@ -175,7 +175,7 @@ proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
 
 
 
-proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzypercentit: int = 100): seq[LineMatch] = 
+proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzypercentit: int = 100): seq[LineMatch] = 
 
 
   #LineMatch = object  # match between to lines of file a and b
@@ -200,9 +200,10 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
 
   #try:
   # open the file for reading
-  echo "Finding line-matches.."
+  echo "Searching line-matches.."
+  echo "Searching - phase 1/2"
 
-  if open(afileob, afilespathst, fmRead) and open(bfileob, bfilepathst, fmRead):
+  if open(afileob, afilepathst, fmRead) and open(bfileob, bfilepathst, fmRead):
     for alinest in afileob.lines:
       alinecountit += 1
       #echo alinecountit, "-a- ", alinest
@@ -212,7 +213,9 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
       setFilePos(bfileob, 0)
       for blinest in bfileob.lines:
         blinecountit += 1
-        #echo blinecountit, "-b- ",blinest
+        #if alinecountit == 1:
+        #  echo blinecountit, "-b- ",blinest
+
         # check for a substring-match between the lines
         # if a match exists add it to the line-matches
 
@@ -223,7 +226,7 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
         lensq = newSeqWith(alinelenit + 1, newSeq[int](blinelenit + 1))
 
         # string-comparison is done incrementally per letter;
-        # if all letters are the same and lenghth > minlen the subst is added to matches 
+        # if all letters are the same and lenghth > minlen the subst is added to matches
         for ait in 1..alinelenit:
           for bit in 1..blinelenit:
 
@@ -272,7 +275,7 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
                 else:
                   lensq[ait][bit] = 0
 
-
+  echo "Searching - phase 2/2"
 
   # Filter: only keep the longest unique, non-overlapping substrings 
   linematchsq = linematchsq.sortedByIt(-it.lengthit)  # largest ones get above
@@ -287,8 +290,37 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
 
   filtered = filtered.sortedByIt((it.alineit, it.acharit))
 
-  #result = linematchsq
-  result = filtered
+  var updated: seq[LineMatch] = @[]
+
+  # previous match
+  var prevob: LineMatch
+  var firstpassbo: bool = true
+
+
+  #remove (partially) overlapping matches
+  for m in filtered:
+      # trim non-letter characters from the substrings
+      var clean = m
+      #clean.asubst = trimToFullWords(m.asubst)
+      #clean.lengthit = clean.asubst.len
+      #if clean.lengthit >= minlengthit:
+      if firstpassbo:
+        updated.add clean
+        firstpassbo = false
+      else:
+        # no (partially) overlapping matches
+        if clean.alineit == prevob.alineit:
+          if clean.acharit >= (prevob.acharit + prevob.lengthit):
+            updated.add clean
+        else:
+          updated.add clean
+      prevob = clean
+
+  echo "comparison complete!"
+
+  #result = filtered
+  result = updated
+
 
 
   #  #unanticipated errors come here
@@ -305,13 +337,13 @@ proc findLinematches(afilespathst, bfilepathst: string; minLengthit: int; fuzzyp
 
 
 
-proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfilepathst: string): seq[StringMatch] =
+proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilepathst: string, fuzzypercentit = 100): seq[StringMatch] =
 
   #[ 
   convert the linematches to string-matches
 
   ADAP FUT:
-  - extend bsubst for overflows as well
+  v-extend bsubst for overflows as well
 
   ]#
   
@@ -330,13 +362,17 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
     #asubst, bsubst: string
     #lengthit: int
     additionst: string
-    bfilest: string
+    afilest, bfilest: string
     alinelenghtit: int = -1
+    prev_alineit, prev_blineit: int = -10
+    secindexit: int
 
 
   echo "Converting matches..."
-  # open the file for reading and create tables with file-data
-  if open(afileob, afilespathst, fmRead) and open(bfileob, bfilepathst, fmRead):
+  echo "-------------------------------------"
+
+  # open the files for reading and create tables with file-data
+  if open(afileob, afilepathst, fmRead) and open(bfileob, bfilepathst, fmRead):
     for alinest in afileob.lines:
       alinecountit += 1
       afiledatatb[alinecountit] = FileLineData(lineindexit: previousindexit, linelenghtit: alinest.len)
@@ -348,11 +384,15 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
       bfiledatatb[blinecountit] = FileLineData(lineindexit: previousindexit, linelenghtit: blinest.len)
       previousindexit += blinest.len + "\p".len
 
-    bfilest = readFile(afilespathst)
+    afilest = readFile(afilepathst)
+    bfilest = readFile(bfilepathst)
 
 
 
-  # determine match-continuations to following lines
+  # determine match-continuations to following lines,
+  # by setting additional lmob-fields
+  # field continues_to_lineit must be set -1 or something > 0
+  # field is_continuation_frombo must be set to true if applicable
   for lmob in mitems(linematchsq):
     lmob.continues_to_lineit = 0    # preset; 
     alinelenghtit = afiledatatb[lmob.alineit].linelenghtit
@@ -363,21 +403,31 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
       lmob.continues_to_lineit = -1
 
       if lmob.acharit > 0:    # line-local match:
-        lmob.is_continuation_frombo = false
+        #lmob.is_continuation_frombo = false
+        discard
 
     # match goes on till eol (end-of-line)
     # match may overflow to next line
     elif lmob.acharit + lmob.lengthit == alinelenghtit:
-
+      prev_alineit = -10
+      prev_blineit = -10
       # get continuation-info
+      secindexit = 0
       for seclmob in linematchsq:
 
         if seclmob.alineit > lmob.alineit:
 
-          if lmob.acharit == 0:
-            lmob.continues_to_lineit = seclmob.alineit
-            lmob.is_continuation_frombo = true
-          elif lmob.acharit > 0:
+          if seclmob.acharit == 0:
+            if seclmob.alineit == prev_alineit + 1 and seclmob.blineit == prev_blineit + 1:
+              lmob.continues_to_lineit = seclmob.alineit
+              # set the following lmob in this hacky way
+              linematchsq[secindexit].is_continuation_frombo = true
+            else:
+              if lmob.continues_to_lineit == 0:
+                lmob.continues_to_lineit = -1
+              break   # old values are kept
+
+          elif seclmob.acharit > 0:
             if lmob.continues_to_lineit == 0:
               lmob.continues_to_lineit = -1
             break
@@ -387,15 +437,25 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
           if seclmob.acharit + seclmob.lengthit < alinelenghtit:
             break
 
+        prev_alineit = seclmob.alineit
+        prev_blineit = seclmob.blineit
+        secindexit += 1
+
+
+
+
     else:   # match would extend beyond line-break
       echo "Match should not extend beyond line-break..."
       wisp("should not happen...")
 
+  # last match will never continu to another line
+  linematchsq[linematchsq.len - 1].continues_to_lineit = -1
+
+
 
   # actual conversion of matches
-
   for lmob in linematchsq:
-    
+    #echo lmob
     if lmob.is_continuation_frombo:
       discard
       # skip because it is added to another one
@@ -404,13 +464,14 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
 
 
       if lmob.continues_to_lineit == -1:
+        #wisp("-1:  ", lmob)
+
         sob = StringMatch()
         sob.asubst = lmob.asubst
         sob.bsubst = lmob.bsubst
         sob.astartit = afiledatatb[lmob.alineit].lineindexit + lmob.acharit
         sob.bstartit = bfiledatatb[lmob.blineit].lineindexit + lmob.bcharit
         sob.lengthit = lmob.lengthit
-
         sobsq.add(sob)
 
       elif lmob.continues_to_lineit == 0:
@@ -421,23 +482,25 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilespathst, bfile
 
         for seclmob in linematchsq:
 
-          if seclmob.alineit > lmob.alineit and seclmob.alineit <= seclmob.continues_to_lineit:
+          if seclmob.alineit >= lmob.alineit and seclmob.alineit <= lmob.continues_to_lineit:
             additionst &= seclmob.asubst & "\p"
 
+        #wisp("> 0:  ", lmob)
+
         sob = StringMatch()
-        sob.asubst = lmob.asubst & additionst
+        sob.asubst = additionst
         sob.astartit = afiledatatb[lmob.alineit].lineindexit + lmob.acharit
         sob.bstartit = bfiledatatb[lmob.blineit].lineindexit + lmob.bcharit
         sob.lengthit = sob.asubst.len
-        sob.bsubst = bfilest[sob.bstartit .. sob.bstartit + sob.lengthit]
+        if sob.bstartit + sob.lengthit < bfilest.len and fuzzypercentit < 100:
+          sob.bsubst = bfilest[sob.bstartit .. sob.bstartit + sob.lengthit]
 
         sobsq.add(sob)
-
-
 
   sobsq = sobsq.sortedByIt(it.astartit)
 
   result = sobsq
+
 
 
 proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] = 
@@ -446,7 +509,8 @@ proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] =
     mobsq: seq[Match]
     mob: Match
   
-  echo "backporting ..."
+  echo "Backporting ..."
+
   for sob in sobsq:
     mob.substring = sob.asubst
     mob.substrB = sob.bsubst
@@ -470,7 +534,7 @@ proc findCommonSubstrings(a, b: string; minLen: int; fuzzypercentit: int = 100):
     (because currently the matches are sorted on the a-file order)
   ]#
 
-  var wispbo: bool = true
+  wispbo = true
   #var debugbo: bool = true
   echo "starting findCommonSubstrings ..."
 
@@ -660,7 +724,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
   # the boundary defined between short and long overlap-indicators
   # put the new file in 01.txt
 
-  var wispbo: bool = false
+  wispbo = false
   var markedst: string = first
 
   # set cur-pos = 0
@@ -756,6 +820,26 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
     result = mainst & addst
   elif styleu == ccaLineEnding:
     result = mainst & addst & "\p"
+
+
+
+proc generateTestFile() =
+
+  const FileName = "alfabet.txt"
+
+  # Open bestand om te schrijven
+  var f = open(FileName, fmWrite)
+
+  # Loop van 'a' tot 'z'
+  for ch in 'a'..'z':
+    let line = repeat($ch, 30)  # Maak een string met 10x dezelfde letter
+    f.writeLine(line)
+
+  f.close()
+
+  echo "Bestand geschreven naar: ", FileName
+
+
 
 
 proc echoHelpInfo() = 
@@ -894,7 +978,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
   var lmobsq: seq[LineMatch]
   lmobsq = findLinematches(filename1st, filename2st, minLen, fuzzypercentit)
-  let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st))
+  let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st, fuzzypercentit))
 
 
   overlap1st = reportOverlap(text1st, text2st, matchobsq, minLen, false, fuzzypercentit)
@@ -1077,14 +1161,25 @@ else:
   #-----------------------------------------
   #echo findCommonSubstrings("xxxschaapyyy", "schaep", 3, 90)
   #-------------------------------
-  var testsq: seq[LineMatch]
+  var 
+    testsq: seq[LineMatch]
+    fuzzit: int = 100
   echo "\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-  testsq = findLinematches("01.txt","02.txt", 15, 70)
+  testsq = findLinematches("01.txt","02.txt", 15, fuzzit)
   echo "===========================================================\p"
   for x in testsq:
     echo x
     echo "-----------------------------------------"
+  echo "===========================================================\p"
 
-  echo convertToStringMatches(testsq, "01.txt","02.txt")
+  var sobsq: seq[StringMatch]
+  sobsq = convertToStringMatches(testsq, "01.txt","02.txt", fuzzit)
+  for ob in sobsq:
+    echo ob
+    echo "-----------------------------------------"
+
+
+  # "---------------------------------------------"
+  #generateTestFile()
 
 
