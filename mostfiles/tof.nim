@@ -8,7 +8,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.91
+var versionfl: float = 1.92
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -260,7 +260,7 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
             else:   # do fuzzy comparison
               lensq[ait][bit] = lensq[ait - 1][bit - 1] + 1
 
-              if lensq[ait][bit] >= minLengthit:                    
+              if lensq[ait][bit] >= minLengthit:
                 lmob = LineMatch()    # reset object
                 lmob.lengthit = lensq[ait][bit]
                 lmob.acharit = ait - lmob.lengthit   # starting-point
@@ -301,20 +301,20 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
   for m in filtered:
       # trim non-letter characters from the substrings
       var clean = m
-      #clean.asubst = trimToFullWords(m.asubst)
-      #clean.lengthit = clean.asubst.len
-      #if clean.lengthit >= minlengthit:
-      if firstpassbo:
-        updated.add clean
-        firstpassbo = false
-      else:
-        # no (partially) overlapping matches
-        if clean.alineit == prevob.alineit:
-          if clean.acharit >= (prevob.acharit + prevob.lengthit):
-            updated.add clean
-        else:
+      clean.asubst = trimToFullWords(m.asubst)
+      clean.lengthit = clean.asubst.len
+      if clean.lengthit >= minlengthit:
+        if firstpassbo:
           updated.add clean
-      prevob = clean
+          firstpassbo = false
+        else:
+          # no (partially) overlapping matches
+          if clean.alineit == prevob.alineit:
+            if clean.acharit > (prevob.acharit + prevob.lengthit):
+              updated.add clean
+          else:
+            updated.add clean
+        prevob = clean
 
   echo "comparison complete!"
 
@@ -482,8 +482,10 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilep
 
         for seclmob in linematchsq:
 
-          if seclmob.alineit >= lmob.alineit and seclmob.alineit <= lmob.continues_to_lineit:
+          if seclmob.alineit >= lmob.alineit and seclmob.alineit < lmob.continues_to_lineit:
             additionst &= seclmob.asubst & "\p"
+          elif seclmob.alineit == lmob.continues_to_lineit:
+            additionst &= seclmob.asubst
 
         #wisp("> 0:  ", lmob)
 
@@ -760,6 +762,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
     if matchob.startA != startA_previous:   # sometimes multiples because of the other file B
     #if matchob.startA != startA_previous and matchob.substring notin allsubstringsq:  # why is substring uniqueness needed?
 
+      previousposit = curposit
       curposit = markedst.find(matchob.substring, curposit)
 
       if debugbo: echo "matchob.substring = " & matchob.substring
@@ -787,7 +790,6 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
 
           # update cur-pos
           curposit = curposit + overlapsendst.len
-        previousposit = curposit
 
 
       else:   # should never happen?
@@ -958,10 +960,15 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
   tmp1st = ""
   tmp2st = ""
 
-  # FOR NOW DONT CHANGE THE ORIGINAL; A CLEANED COPY IS WRITTEN TO previous_comparisons
-  #echo "writing cleaned files..."
-  #writeFile(filename1st, text1st)
-  #writeFile(filename2st, text2st)
+  echo "writing cleaned files..."
+  writeFile(filename1st, text1st)
+  writeFile(filename2st, text2st)
+
+  # open file 1 and 2
+  text1st = readFile(filename1st)
+  text2st = readFile(filename2st)
+
+
   
   var 
     compared_01tekst, compared_02tekst: string
@@ -1009,15 +1016,29 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
   writeFile(filepath_compared_01tekst, compared_01tekst)
 
 
-  ## for the reverse comparison (1 and 2 swapped) also the matching must be rerun
-  ## ? todo: instead reuse the existing one and resort
+  
+
+  # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
+  # ? todo: instead reuse the existing one and resort
+  
   #let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
 
-  #overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
-  #writeFile(filepath_overlap2st, overlap2st)
+  var reverse_lmobsq: seq[LineMatch]
+  echo "--------------------------------------------"
+  echo "Running reverse comparison..."
+  echo "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\p"
 
-  #compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
-  #writeFile(filepath_compared_02tekst, compared_02tekst)
+  reverse_lmobsq = findLinematches(filename2st, filename1st, minLen, fuzzypercentit)
+  let reverse_matchobsq = newToOldMatch(convertToStringMatches(reverse_lmobsq, filename2st, filename1st, fuzzypercentit))
+
+  overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
+  writeFile(filepath_overlap2st, overlap2st)
+
+  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
+  writeFile(filepath_compared_02tekst, compared_02tekst)
+
+
+
 
   if not (skippartseu == skipEchoFileInsertions):
     echo compared_01tekst
