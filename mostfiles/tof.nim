@@ -1,5 +1,6 @@
 # Starting with 2 files to compare for overlapping texts.
-# Todo update for large files by implementing a line-based algorithm.
+# Tof version 2 is an update for large files by usage of a line-based algorithm.
+
 
 
 import std/[strutils, sequtils, algorithm, times, parseopt, math, tables]
@@ -8,7 +9,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.92
+var versionfl: float = 1.93
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -17,14 +18,15 @@ var last_time_stamp: string = "2025-05-05_15.50"
 
 
 type
-  Match = object
+  Match = object          # old-style object futurally to be replaced by StringMatch (below)
     substring: string
     substrB: string
     startA: int
     startB: int
     length: int
 
-  StringMatch = object      # a common substring found in two compared strings
+
+  StringMatch = object      # a common substring found in two compared strings (for file-based lineless designation)
     asubst: string      # matching subst in file A
     bsubst: string      # matching subst in file B (only relevant for fuzzy compare)
     astartit: int       # character-position where the subst starts in file a
@@ -38,7 +40,7 @@ type
     linelenghtit: int    # length of line (including or excluding linebreaks?)
 
 
-  LineMatch = object  # match between to lines of file a and b
+  LineMatch = object  # substring-match between to lines of file a and b
     asubst: string    # matching subst in file A
     alineit: int      # line-number
     acharit: int      # line-char-position where subst starts
@@ -48,20 +50,6 @@ type
     lengthit: int    # length of subst a and b
     is_continuation_frombo: bool  # is continuation from previous line-match
     continues_to_lineit: int    # the match continues until this line
-
-
-  #FullMatch = object
-  #  asubst: string
-  #  alinestartit: int
-  #  acharstartit: int
-  #  alineendit: int
-  #  acharendit: int
-  #  bsubst: string
-  #  blinestartit: int
-  #  bcharstartit: int
-  #  blineendit: int
-  #  bcharendit: int
-
 
 
 
@@ -176,6 +164,10 @@ proc fuzzyMatch(first, secondst: string; min_percentit: int): bool =
 
 
 proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzypercentit: int = 100): seq[LineMatch] = 
+
+  #[
+    From 2 text-files, find the matching substrings per line by comparing all the lines and store the matches in a sequence of objects of type LineMatch.
+  ]#
 
 
   #LineMatch = object  # match between to lines of file a and b
@@ -340,7 +332,7 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
 proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilepathst: string, fuzzypercentit = 100): seq[StringMatch] =
 
   #[ 
-  convert the linematches to string-matches
+  Convert the linematches to string-matches. This means seeing and storing the line-matches as an entire file and using file-character-positions instead of line-nrs and line-char-positions.
 
   ADAP FUT:
   v-extend bsubst for overflows as well
@@ -507,6 +499,8 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilep
 
 proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] = 
 
+  # allthoe a new and improved StringMatch-object has been created, the old code still works with the old-style object, so the objects must be backported for now..
+
   var 
     mobsq: seq[Match]
     mob: Match
@@ -523,6 +517,7 @@ proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] =
     mobsq.add(mob)
 
   result = mobsq
+
 
 
 
@@ -941,13 +936,18 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
   # put the new file in 01.txt
   var 
-    filename1st: string = "01.txt"
-    filename2st: string = "02.txt"
+    filename_orig_1st: string = "01.txt"
+    filename_orig_2st: string = "02.txt"
+
+    filename1st: string = "01.txt.tmp"
+    filename2st: string = "02.txt.tmp"
+
+
     text1st, text2st, tmp1st, tmp2st: string
 
   # open file 1 and 2
-  tmp1st = readFile(filename1st)
-  tmp2st = readFile(filename2st)
+  tmp1st = readFile(filename_orig_1st)
+  tmp2st = readFile(filename_orig_2st)
 
   #pre-clean the files
   echo "start pre-cleaning files..."
@@ -981,8 +981,6 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     overlap1st, overlap2st: string = ""
 
 
-  #let matchobsq = findCommonSubstrings(text1st, text2st, minLen, fuzzypercentit)
-
   var lmobsq: seq[LineMatch]
   lmobsq = findLinematches(filename1st, filename2st, minLen, fuzzypercentit)
   let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st, fuzzypercentit))
@@ -1003,8 +1001,8 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
   filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
   filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
-  filepath_overlap1st = subdirst & "/" & timestampst & "_matches01.txt"
-  filepath_overlap2st = subdirst & "/" & timestampst & "_matches02.txt"
+  filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
+  filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
 
   filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
   filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
