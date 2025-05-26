@@ -9,7 +9,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 1.93
+var versionfl: float = 2.00
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -441,7 +441,8 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilep
       wisp("should not happen...")
 
   # last match will never continu to another line
-  linematchsq[linematchsq.len - 1].continues_to_lineit = -1
+  if linematchsq.len > 0:
+    linematchsq[linematchsq.len - 1].continues_to_lineit = -1
 
 
 
@@ -942,110 +943,113 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     filename1st: string = "01.txt.tmp"
     filename2st: string = "02.txt.tmp"
 
-
     text1st, text2st, tmp1st, tmp2st: string
+
 
   # open file 1 and 2
   tmp1st = readFile(filename_orig_1st)
   tmp2st = readFile(filename_orig_2st)
 
-  #pre-clean the files
-  echo "start pre-cleaning files..."
-  text1st = cleanFile(tmp1st, cleanSingleWhiteSpace)
-  text2st = cleanFile(tmp2st, cleanSingleWhiteSpace)
+  if not (tmp1st == "" or tmp2st == ""):
 
-  #text1st = tmp1st
-  #text2st = tmp2st
+    #pre-clean the files
+    echo "start pre-cleaning files..."
+    text1st = cleanFile(tmp1st, cleanSingleWhiteSpace)
+    text2st = cleanFile(tmp2st, cleanSingleWhiteSpace)
 
-  tmp1st = ""
-  tmp2st = ""
+    #text1st = tmp1st
+    #text2st = tmp2st
 
-  echo "writing cleaned files..."
-  writeFile(filename1st, text1st)
-  writeFile(filename2st, text2st)
+    tmp1st = ""
+    tmp2st = ""
 
-  # open file 1 and 2
-  text1st = readFile(filename1st)
-  text2st = readFile(filename2st)
+    echo "writing cleaned files..."
+    writeFile(filename1st, text1st)
+    writeFile(filename2st, text2st)
 
-
-  
-  var 
-    compared_01tekst, compared_02tekst: string
-    messagest: string
-    subdirst = "previous_comparisons"
-    filepath_original_01tekst, filepath_original_02tekst: string
-    filepath_overlap1st, filepath_overlap2st, filepath_compared_01tekst, filepath_compared_02tekst: string
-    timestampst: string
-    firstchars01st, firstchars02st: string
-    overlap1st, overlap2st: string = ""
+    # open file 1 and 2
+    text1st = readFile(filename1st)
+    text2st = readFile(filename2st)
 
 
-  var lmobsq: seq[LineMatch]
-  lmobsq = findLinematches(filename1st, filename2st, minLen, fuzzypercentit)
-  let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st, fuzzypercentit))
+    
+    var 
+      compared_01tekst, compared_02tekst: string
+      messagest: string
+      subdirst = "previous_comparisons"
+      filepath_original_01tekst, filepath_original_02tekst: string
+      filepath_overlap1st, filepath_overlap2st, filepath_compared_01tekst, filepath_compared_02tekst: string
+      timestampst: string
+      firstchars01st, firstchars02st: string
+      overlap1st, overlap2st: string = ""
 
 
-  overlap1st = reportOverlap(text1st, text2st, matchobsq, minLen, false, fuzzypercentit)
-  echo ""
-  echo overlap1st
-
-  compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit)
-  
-  createDir(subdirst)
-
-  timestampst = format(now(), "yyyyMMdd'_'HHmm")
-
-  firstchars01st = safeSlice(cleanFile(text1st), 50)
-  firstchars02st = safeSlice(cleanFile(text2st), 50)
-
-  filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
-  filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
-  filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
-  filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
-
-  filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
-  filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
-
-  copyFile("01.txt", filepath_original_01tekst)
-  copyFile("02.txt", filepath_original_02tekst)
-
-  writeFile(filepath_overlap1st, overlap1st)
-  writeFile(filepath_compared_01tekst, compared_01tekst)
+    var lmobsq: seq[LineMatch]
+    lmobsq = findLinematches(filename1st, filename2st, minLen, fuzzypercentit)
+    let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, filename1st, filename2st, fuzzypercentit))
 
 
-  
+    overlap1st = reportOverlap(text1st, text2st, matchobsq, minLen, false, fuzzypercentit)
+    echo ""
+    echo overlap1st
 
-  # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
-  # ? todo: instead reuse the existing one and resort
-  
-  #let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
+    compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit)
+    
+    createDir(subdirst)
 
-  var reverse_lmobsq: seq[LineMatch]
-  echo "--------------------------------------------"
-  echo "Running reverse comparison..."
-  echo "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\p"
+    timestampst = format(now(), "yyyyMMdd'_'HHmm")
 
-  reverse_lmobsq = findLinematches(filename2st, filename1st, minLen, fuzzypercentit)
-  let reverse_matchobsq = newToOldMatch(convertToStringMatches(reverse_lmobsq, filename2st, filename1st, fuzzypercentit))
+    firstchars01st = safeSlice(cleanFile(text1st), 50)
+    firstchars02st = safeSlice(cleanFile(text2st), 50)
 
-  overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
-  writeFile(filepath_overlap2st, overlap2st)
+    filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
+    filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
+    filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
+    filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
 
-  compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
-  writeFile(filepath_compared_02tekst, compared_02tekst)
+    filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
+    filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
+
+    copyFile("01.txt", filepath_original_01tekst)
+    copyFile("02.txt", filepath_original_02tekst)
+
+    writeFile(filepath_overlap1st, overlap1st)
+    writeFile(filepath_compared_01tekst, compared_01tekst)
 
 
 
 
-  if not (skippartseu == skipEchoFileInsertions):
-    echo compared_01tekst
+    # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
+    # ? todo: instead reuse the existing one and resort
+    
+    #let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
+
+    var reverse_lmobsq: seq[LineMatch]
+    echo "--------------------------------------------"
+    echo "Running reverse comparison..."
+    echo "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\p"
+
+    reverse_lmobsq = findLinematches(filename2st, filename1st, minLen, fuzzypercentit)
+    let reverse_matchobsq = newToOldMatch(convertToStringMatches(reverse_lmobsq, filename2st, filename1st, fuzzypercentit))
+
+    overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
+    writeFile(filepath_overlap2st, overlap2st)
+
+    compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
+    writeFile(filepath_compared_02tekst, compared_02tekst)
 
 
-  messagest = "Files were written to the following subdirectory: " & subdirst
-  echo "##################################################################################"
-  echo messagest
 
+
+    if not (skippartseu == skipEchoFileInsertions):
+      echo compared_01tekst
+
+
+    messagest = "Files were written to the following subdirectory: " & subdirst
+    echo "##################################################################################"
+    echo messagest
+  else:
+    echo "One or both files (01.txt and/or 02.txt) is empty; please input texts to compare. \pProgram tof exiting..."
 
 # ====================================================================================
 
@@ -1121,7 +1125,6 @@ proc processCommandLine() =
         assert(false) # cannot happen
 
 
-
     case procst
     of "saveAndEchoResults":
       saveAndEchoResults(lengthit, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit)
@@ -1129,18 +1132,18 @@ proc processCommandLine() =
       echoHelpInfo()
 
 
-
-  except IndexDefect:
+  except IOError:
     let errob = getCurrentException()
-    echo "\p-----error start-----" 
-    echo "Index-error caused by bug in program"
-    echo "System-error-description:"
+    echo "\pCannot open one or more files! 01.txt and 02.txt or alternatives must be present. \pTechnical details:" 
+    echo "-------------------------------------------------------"
     echo errob.name
     echo errob.msg
-    echo repr(errob) 
-    echo "----End error-----\p"
+    echo repr(errob)
+    echo "-------------------------------------------------------"
+    echo "\pExiting program gracefully...\p"
 
-    #unanticipated errors come here
+
+  #unanticipated errors come here
   except:
     let errob = getCurrentException()
     echo "\p******* Unanticipated error *******" 

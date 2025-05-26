@@ -4,6 +4,7 @@
 
 TextOverlapFinder (TOF) enables you to find textual matches between two text-files. As opposed to the Linux diff command, which finds differences between texts, tof finds matches between texts. 
 
+
 ### Use-cases
 
 - my primary use-case was to compare two journalistic stories on the same subject to see which parts overlap (are identical) and which are unique to each story.
@@ -12,6 +13,10 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 - you can use the program to check for plagiarism.
 - from 0.68 onward you can use fuzzy compare. By that you can determine equal forms and subjects (aot equal / common sources). However the fuzzy comparison is still experimental concerning its beta-quality.
 
+
+### Latest
+
+Tof 2.0 is a new version of tof that can handle larger files. Tof <= 1 could not handle large files and on Linux would be OOM-ed (out-of-memory (oom) killing of programs that use to much memory) for files > 40 K on my 8 GB laptop. Tof 2.0 now has a line-based algorithm that avoids much memory-usage.
 
 ### Installation
 
@@ -22,6 +27,7 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 - run with: ./tof or ./tof.exe
 - futurally compilates may be delivered.
 
+
 ### Usage
 
 - in the dir where you have placed the executable tof (linux) or tof.exe (windows), you must place the files:
@@ -31,6 +37,7 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 - open a terminal and enter ./tof or ./tof.exe
 - upon running, you must enter the minimal length of strings you want to compare to become matches. (if you enter 3, then the word "the" would become a match, which would not be very usefull). Experiment with different lengths.
 - let the program run.
+
 
 ### Commands and options
 
@@ -90,9 +97,11 @@ etc.
 - write results to files.
 - implement a command-structure with options.
 - added fuzzy compare (beta)
+- added large-files-handling (>= 2.0)
+
 
 ### Future
 
 Future-plans:
-- deliver executables.
+- deliver executable for windows
 
