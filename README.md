@@ -65,6 +65,10 @@ You can input the minimal lenghth of matching strings to be included in the list
 only one skippable item exists yet: e, or echo_file_insertions
 usefull when you are only interested in the matches to be printed to the screen.
 
+-u or --use-alternate-source; example -u
+
+Instead of the text-files 01.txt and 02.txt, use marked files from the file-list "source_files.dat". Marking is done by prefixing an asterisk * before the two files you want to compare. The first two encountered marked ones will be used, others will be discarded. If not two files are pre-starred the program will report that and exit. No space between asterisk and filename is allowed.
+
 
 ### Output
 

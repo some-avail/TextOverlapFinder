@@ -9,7 +9,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.00
+var versionfl: float = 2.10
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -708,14 +708,15 @@ proc getStringStats(tekst, namest: string): string =
   # return string-stats of tekst number of lines, words and characters
 
   var outst: string
-  #outst = namest & " (" & tekst[0..40] & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."
   outst = namest & " (" & safeSlice(cleanFile(tekst), 40) & "...) has " & $tekst.splitLines.len  & " lines, " & $tekst.splitWhitespace.len & " words,and " & $tekst.len & " characters."  
   outst &= "\p-------------------------------------"
 
   result = outst
 
 
-proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: seq[Match], boundary_lengthit: int = 40): string =
+
+
+proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: seq[Match], boundary_lengthit: int = 40; messagest: string = ""): string =
   #[
     Insert into the first string (from file1) overlap-indicators from the overlaps (matchobsq) with the second string and return the new marked-up first string (file-text).
   ]#
@@ -744,7 +745,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
   var notfoundcountit: int = 0
   #var boundary_lengthit: int = 40    # the boundary defined between short and long overlap-indicators
 
-  echo "\p\pCreating comparison-file (inserting overlap-indicators)....\p\p"
+  echo "\p\pCreating comparison-file (inserting overlap-indicators) for the " & messagest &  " file....\p\p"
 
 
   for matchob in matchobsq:
@@ -845,6 +846,15 @@ proc echoHelpInfo() =
   let messagest = """
 
 Just run ./tof or ./tof.exe to start the program.
+
+- in the dir where you have placed the executable tof (linux) or tof.exe (windows), you must place the files:
+  - 01.txt, and
+  - 02.txt
+- in these text-files you must paste the texts you want compare for overlaps / matches.
+- open a terminal and enter ./tof or ./tof.exe
+- upon running, you must enter the minimal length of strings you want to compare to become matches. (if you enter 3, then the word "the" would become a match, which would not be very usefull). Experiment with different lengths.
+- from 2.1 onward you can use the file-list 'source_files.dat' to use alternate source (see option -u)
+
 To adjust defaults, use one of the below options:
 
 -a or --accuracy; example -a:80
@@ -868,6 +878,12 @@ You can input the minimal lenghth of matching strings to be included in the list
 
 only one skippable item exists yet: e, or echo_file_insertions
 usefull when you are only interested in the matches to be printed to the screen.
+
+-u or --use-alternate-source; example -u
+
+Instead of the text-files 01.txt and 02.txt, use marked files from the file-list 'source_files.dat'. 
+Marking is done by prefixing an asterisk * before the two files you want to compare. The first two encountered marked ones will be used, others will be discarded. If not two files are pre-starred the program will report that and exit. No space between asterisk and filename is allowed.
+
   """
 
   echo messagest
@@ -879,11 +895,11 @@ proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit:
   var overlapst: string
   overlapst = ccat("Results for Tof " & $versionfl & ":")
   if not reversebo:
-    overlapst = ccat(overlapst, getStringStats(text1st, "File 01.txt"))
-    overlapst = ccat(overlapst, getStringStats(text2st, "File 02.txt"))
+    overlapst = ccat(overlapst, getStringStats(text1st, "File 01.txt or alt.1"))
+    overlapst = ccat(overlapst, getStringStats(text2st, "File 02.txt or alt.2"))
   else:
-    overlapst = ccat(overlapst, getStringStats(text1st, "File 02.txt"))
-    overlapst = ccat(overlapst, getStringStats(text2st, "File 01.txt"))
+    overlapst = ccat(overlapst, getStringStats(text1st, "File 02.txt or alt.2"))
+    overlapst = ccat(overlapst, getStringStats(text2st, "File 01.txt or alt.1"))
 
   overlapst = ccat(overlapst,"")
   overlapst = ccat(overlapst, "Minimal overlap-length: " & $minlengthit)
@@ -940,17 +956,49 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     filename_orig_1st: string = "01.txt"
     filename_orig_2st: string = "02.txt"
 
-    filename1st: string = "01.txt.tmp"
-    filename2st: string = "02.txt.tmp"
+    filename1st: string = "first.txt.tmp"
+    filename2st: string = "sec.txt.tmp"
 
     text1st, text2st, tmp1st, tmp2st: string
 
+    alt_filename1st, alt_filename2st: string
 
-  # open file 1 and 2
-  tmp1st = readFile(filename_orig_1st)
-  tmp2st = readFile(filename_orig_2st)
+    alter_source_filest: string
+    alt_lisq, starlisq: seq[string]
+    alter_invalidbo: bool = false
 
-  if not (tmp1st == "" or tmp2st == ""):
+  const source_filenamest = "source_files.dat"
+
+
+
+  if use_alternate_sourcesbo:
+    alter_source_filest = readFile(source_filenamest)
+    alt_lisq = alter_source_filest.splitLines()
+    for sourcest in alt_lisq:
+      if "*" in sourcest:
+        starlisq.add(sourcest)
+
+    if starlisq.len >= 2:
+      # open file 1 and 2 using the toppal starred items
+      alt_filename1st = starlisq[0].split("*")[1]
+      alt_filename2st = starlisq[1].split("*")[1]
+      tmp1st = readFile(alt_filename1st)
+      tmp2st = readFile(alt_filename2st)
+  
+    else:
+      alter_invalidbo = true
+      echo "One needs minimally 2 pre-starred items in the " & source_filenamest & " to compare (like: *filename)"
+
+  else:
+    # open file 1 and 2
+    tmp1st = readFile(filename_orig_1st)
+    tmp2st = readFile(filename_orig_2st)
+
+
+
+  if (not use_alternate_sourcesbo and not(tmp1st == "" or tmp2st == "") or 
+    use_alternate_sourcesbo and not alter_invalidbo):
+
 
     #pre-clean the files
     echo "start pre-cleaning files..."
@@ -993,25 +1041,45 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     echo ""
     echo overlap1st
 
-    compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit)
+    compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit, "FIRST")
     
     createDir(subdirst)
 
     timestampst = format(now(), "yyyyMMdd'_'HHmm")
 
-    firstchars01st = safeSlice(cleanFile(text1st), 50)
-    firstchars02st = safeSlice(cleanFile(text2st), 50)
+    if not use_alternate_sourcesbo:
 
-    filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
-    filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
+      firstchars01st = safeSlice(cleanFile(text1st), 50)
+      firstchars02st = safeSlice(cleanFile(text2st), 50)
+
+      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
+      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
+
+      filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
+      filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
+
+    else:     # use alternate source-list
+
+      firstchars01st = safeSlice(cleanFile(text1st), 25)
+      firstchars02st = safeSlice(cleanFile(text2st), 25)
+
+      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & alt_filename1st & "_" & firstchars01st & ".txt" 
+      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & alt_filename2st & "_" & firstchars02st & ".txt" 
+
+      filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & alt_filename1st & "_" & firstchars01st & ".txt"
+      filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & alt_filename2st & "_" & firstchars02st & ".txt"
+
+
     filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
     filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
 
-    filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
-    filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
+    if not use_alternate_sourcesbo:
+      copyFile("01.txt", filepath_original_01tekst)
+      copyFile("02.txt", filepath_original_02tekst)
+    else:
+      copyFile(alt_filename1st, filepath_original_01tekst)
+      copyFile(alt_filename2st, filepath_original_02tekst)
 
-    copyFile("01.txt", filepath_original_01tekst)
-    copyFile("02.txt", filepath_original_02tekst)
 
     writeFile(filepath_overlap1st, overlap1st)
     writeFile(filepath_compared_01tekst, compared_01tekst)
@@ -1035,7 +1103,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
     writeFile(filepath_overlap2st, overlap2st)
 
-    compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit)
+    compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit, "SECOND")
     writeFile(filepath_compared_02tekst, compared_02tekst)
 
 
@@ -1049,7 +1117,10 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     echo "##################################################################################"
     echo messagest
   else:
-    echo "One or both files (01.txt and/or 02.txt) is empty; please input texts to compare. \pProgram tof exiting..."
+    if not use_alternate_sourcesbo and (tmp1st == "" or tmp2st == ""):
+      echo "One or both files (01.txt and/or 02.txt) is empty; please input texts to compare. \pProgram tof exiting..."
+    elif use_alternate_sourcesbo and alter_invalidbo:
+      echo "Please provide a valid " & source_filenamest & " with 2 pre-starred items...\pExiting tof..."
 
 # ====================================================================================
 
@@ -1074,11 +1145,11 @@ proc processCommandLine() =
     fuzzypercentit: int = 100
     skipeu: Skippings = skipNothing
     boundary_lengthit: int = 30
+    use_alternate_sourcesbo: bool = false
 
   try:
     echo "----------------------------------------------------"
     echo "Thanks for using TextOverlapFinder " & $versionfl
-    #echo "Chosen procedure = " & procst
     echo "For help type: ./tof -h or ./tof --help"
     echo "----------------------------------------------------"
 
@@ -1113,11 +1184,13 @@ proc processCommandLine() =
           else:
             echo "You entered the length-key(-l), but not a valid value (valid is like: -l:20). \pYou can input manually now..."
 
-
         of "s", "skip-part":
           case val:
           of "e", "echo_file_insertions":
             skipeu = skipEchoFileInsertions
+
+        of "u", "use-alternate-source":
+          use_alternate_sourcesbo = true
 
         of "h", "help":
           procst = "echoHelpInfo"
@@ -1127,18 +1200,17 @@ proc processCommandLine() =
 
     case procst
     of "saveAndEchoResults":
-      saveAndEchoResults(lengthit, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit)
+      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit)
     of "echoHelpInfo":
       echoHelpInfo()
 
 
   except IOError:
     let errob = getCurrentException()
-    echo "\pCannot open one or more files! 01.txt and 02.txt or alternatives must be present. \pTechnical details:" 
+    echo "\pCannot open one or more files! 01.txt and 02.txt or alternatives from source_files.dat must be present. \pTechnical details:" 
     echo "-------------------------------------------------------"
     echo errob.name
     echo errob.msg
-    echo repr(errob)
     echo "-------------------------------------------------------"
     echo "\pExiting program gracefully...\p"
 
