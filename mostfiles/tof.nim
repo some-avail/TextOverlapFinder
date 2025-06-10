@@ -3,13 +3,13 @@
 
 
 
-import std/[strutils, sequtils, algorithm, times, parseopt, math, tables]
+import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os]
 import std/private/[osdirs,osfiles]
 
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.10
+var versionfl: float = 2.11
 
 # sporadically updated:
 var last_time_stamp: string = "2025-05-05_15.50"
@@ -50,7 +50,6 @@ type
     lengthit: int    # length of subst a and b
     is_continuation_frombo: bool  # is continuation from previous line-match
     continues_to_lineit: int    # the match continues until this line
-
 
 
 
@@ -241,12 +240,6 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
 
               else:
                 lensq[ait][bit] = 0
-                #if foundbo:
-                #  #echo "found ", alinecountit, " ", blinecountit, " ", ait, " ", bit
-                #  linematchsq.add lmob
-                #  #echo "    " & $lmob
-                #  lmob = LineMatch()    # reset object
-                #  foundbo = false
 
 
             else:   # do fuzzy comparison
@@ -341,7 +334,6 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilep
   
 
   var 
-    #overflowtonextbo, overflowfrompreviousbo: bool = false
     sob: StringMatch
     sobsq: seq[StringMatch]
     afiledatatb: Table[int, FileLineData]
@@ -524,6 +516,10 @@ proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] =
 
 proc findCommonSubstrings(a, b: string; minLen: int; fuzzypercentit: int = 100): seq[Match] =
   #[ 
+    DEPRECATED - no longer used
+    This string- / file-based algorithm used too much memory
+    Replaced by line-based algo. findLinematches
+
     - a en b are strings to compare on overlapping substrings.
     - the overlaps will be returned in seq of object Match
     - minLen is the minimal length for string to be added to the matches
@@ -951,6 +947,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     minLen = minlengthit
 
 
+
   # put the new file in 01.txt
   var 
     filename_orig_1st: string = "01.txt"
@@ -961,14 +958,14 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
     text1st, text2st, tmp1st, tmp2st: string
 
-    alt_filename1st, alt_filename2st: string
+    alt_filename1st, alt_filename2st: string    # can also be a path
 
     alter_source_filest: string
     alt_lisq, starlisq: seq[string]
     alter_invalidbo: bool = false
+    altnamepart1st, altnamepart2st: string
 
   const source_filenamest = "source_files.dat"
-
 
 
   if use_alternate_sourcesbo:
@@ -982,6 +979,8 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       # open file 1 and 2 using the toppal starred items
       alt_filename1st = starlisq[0].split("*")[1]
       alt_filename2st = starlisq[1].split("*")[1]
+      altnamepart1st = extractFilename(alt_filename1st)
+      altnamepart2st = extractFilename(alt_filename2st)
       tmp1st = readFile(alt_filename1st)
       tmp2st = readFile(alt_filename2st)
   
@@ -1063,11 +1062,11 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       firstchars01st = safeSlice(cleanFile(text1st), 25)
       firstchars02st = safeSlice(cleanFile(text2st), 25)
 
-      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & alt_filename1st & "_" & firstchars01st & ".txt" 
-      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & alt_filename2st & "_" & firstchars02st & ".txt" 
+      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & altnamepart1st & "_" & firstchars01st & ".txt" 
+      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & altnamepart2st & "_" & firstchars02st & ".txt" 
 
-      filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & alt_filename1st & "_" & firstchars01st & ".txt"
-      filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & alt_filename2st & "_" & firstchars02st & ".txt"
+      filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & altnamepart1st & "_" & firstchars01st & ".txt"
+      filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & altnamepart2st & "_" & firstchars02st & ".txt"
 
 
     filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
@@ -1105,7 +1104,6 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
     compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit, "SECOND")
     writeFile(filepath_compared_02tekst, compared_02tekst)
-
 
 
 
@@ -1222,9 +1220,8 @@ proc processCommandLine() =
     echo errob.name
     echo errob.msg
     echo repr(errob)
+    echo getStackTrace()
     echo "\p****End exception****\p"
-
-
 
 
 var testbo: bool = false

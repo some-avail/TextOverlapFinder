@@ -1,4 +1,5 @@
-pietje puk
-*01_middel.txt
-*02_middel.txt
-dummy-regel
+some-file
+*alt_sources/01_middel.txt
+*alt_sources/02_middel.txt
+some-other-file
+
