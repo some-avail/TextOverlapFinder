@@ -9,10 +9,10 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.11
+var versionfl: float = 2.13
 
 # sporadically updated:
-var last_time_stamp: string = "2025-05-05_15.50"
+var last_time_stamp: string = "2025-06-13 22.43"
 
 #wispbo: bool = true
 
@@ -54,8 +54,10 @@ type
 
 
   ConCatStyle = enum
-    ccaNone
-    ccaLineEnding
+    ccaNone               # no extras
+    ccaLineEnding         # with \p
+    ccaLineEndingDouble   # with \p\p
+
 
   CleanStyle = enum
     cleanAllButStripes    # remove all white-repetition + replace with stripes
@@ -77,35 +79,45 @@ var
 
 
 
+
 proc isWordChar(c: char): bool =
+
+  #Checks whether or not character c is alphabetical.
+  #This checks a-z, A-Z ASCII characters only. Use Unicode module for UTF-8 support.
+
   #return c.isAlpha()
   return c.isAlphaAscii()
 
-proc trimToFullWords(s: string): string =
+
+
+
+proc trimToFullWords(mainst: string): string =
   # ai-inspired
   # working is dubious
   # the idea is to clip partial words and spaces of the front and the rear
 
 
-  var start = 0
-  var stop = s.len
+  var startit = 0
+  var stopit = mainst.len
 
   # determine the number of frontal chars to be trimmed (by incrementing)
-  while start < s.len and isWordChar(s[start]):
-    if start == 0 or not isWordChar(s[start - 1]):
+  while startit < mainst.len and isWordChar(mainst[startit]):
+    if startit == 0 or not isWordChar(mainst[startit - 1]):
       break
-    inc start
+    inc startit
 
   # determine the number of rearal chars to be trimmed (by decrementing)
-  while stop > 0 and isWordChar(s[stop - 1]):
-    if stop == s.len or not isWordChar(s[stop]):
+  while stopit > 0 and isWordChar(mainst[stopit - 1]):
+    if stopit == mainst.len or not isWordChar(mainst[stopit]):
       break
-    dec stop
+    dec stopit
 
-  if start < stop:
-    return s[start ..< stop].strip()
+  if startit < stopit:
+    result = mainst[startit ..< stopit].strip()
   else:
-    return ""
+    result = ""
+
+
 
 
 
@@ -283,23 +295,38 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
 
 
   #remove (partially) overlapping matches
-  for m in filtered:
-      # trim non-letter characters from the substrings
-      var clean = m
-      clean.asubst = trimToFullWords(m.asubst)
-      clean.lengthit = clean.asubst.len
-      if clean.lengthit >= minlengthit:
-        if firstpassbo:
-          updated.add clean
-          firstpassbo = false
-        else:
-          # no (partially) overlapping matches
-          if clean.alineit == prevob.alineit:
-            if clean.acharit > (prevob.acharit + prevob.lengthit):
-              updated.add clean
-          else:
-            updated.add clean
-        prevob = clean
+  for limob in filtered:
+    # no (partially) overlapping matches on the same line
+    if limob.alineit == prevob.alineit:
+      if limob.acharit > (prevob.acharit + prevob.lengthit):
+        updated.add limob
+    else:
+      updated.add limob
+    prevob = limob
+
+
+
+  ##remove (partially) overlapping matches
+  #for m in filtered:
+  #    # trim non-letter characters from the substrings
+  #    var clean = m
+  #    clean.asubst = trimToFullWords(m.asubst)
+  #    clean.lengthit = clean.asubst.len
+  #    if clean.lengthit >= minlengthit:
+  #      if firstpassbo:
+  #        updated.add clean
+  #        firstpassbo = false
+  #      else:
+  #        # no (partially) overlapping matches
+  #        if clean.alineit == prevob.alineit:
+  #          if clean.acharit > (prevob.acharit + prevob.lengthit):
+  #            updated.add clean
+  #        else:
+  #          updated.add clean
+  #      prevob = clean
+
+
+
 
   echo "comparison complete!"
 
@@ -307,17 +334,6 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
   result = updated
 
 
-
-  #  #unanticipated errors come here
-  #except:
-  #  let errob = getCurrentException()
-  #  echo "\p******* Unanticipated error *******" 
-  #  echo errob.name
-  #  echo errob.msg
-  #  #echo repr(errob) 
-  #  echo "\p****End exception****\p"
-  #finally:
-  #  fileob.close()
 
 
 
@@ -815,6 +831,8 @@ proc ccat(mainst, addst: string = ""; styleu: ConCatStyle = ccaLineEnding): stri
     result = mainst & addst
   elif styleu == ccaLineEnding:
     result = mainst & addst & "\p"
+  elif styleu == ccaLineEndingDouble:
+    result = mainst & addst & "\p\p"
 
 
 
@@ -908,7 +926,8 @@ proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit:
     overlapst = ccat(overlapst & "A-" & $match.startA & "  L-" & $match.length & "  B-" & $match.startB)
     overlapst = ccat(overlapst, "------------------------------------------------------")
 
-    overlapst = ccat(overlapst, "\"" & match.substring & "\"")
+    #overlapst = ccat(overlapst, "\"" & match.substring & "\"")
+    overlapst = ccat(overlapst, match.substring)
 
     if match.substrB != "":
       overlapst = ccat(overlapst, "------------------------------------------------------")
@@ -921,8 +940,21 @@ proc reportOverlap(text1st, text2st: string; matchobsq: seq[Match]; minlengthit:
 
 
 
-proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing, boundary_lengthit: int = 40) = 
 
+proc reportPureMatches(matchobsq: seq[Match]; styleeu: ConCatStyle = ccaLineEnding): string = 
+
+  # create a list of the matches without extras to use in the cumulative file
+  var matcheslist: string = ""
+  for match in matchobsq:
+    #matcheslist = ccat(matcheslist, "\"" & match.substring & "\"")
+    matcheslist = ccat(matcheslist, match.substring, styleeu)
+
+  result = matcheslist
+
+
+
+
+proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing, boundary_lengthit: int = 40; projectst = "") = 
   #[
     run the program
   ]#
@@ -1028,7 +1060,8 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       filepath_overlap1st, filepath_overlap2st, filepath_compared_01tekst, filepath_compared_02tekst: string
       timestampst: string
       firstchars01st, firstchars02st: string
-      overlap1st, overlap2st: string = ""
+      overlap1st, overlap2st, pure_matchest: string = ""
+
 
 
     var lmobsq: seq[LineMatch]
@@ -1071,6 +1104,11 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
     filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
     filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
+    
+    var filepath_purematchest: string
+    filepath_purematchest = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_pure-matches.txt"
+    var filepath_cumulativest: string
+    filepath_cumulativest = subdirst & "/project_" & projectst & "_accumulative-matches.txt"
 
     if not use_alternate_sourcesbo:
       copyFile("01.txt", filepath_original_01tekst)
@@ -1083,6 +1121,18 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     writeFile(filepath_overlap1st, overlap1st)
     writeFile(filepath_compared_01tekst, compared_01tekst)
 
+    if fuzzypercentit == 100:
+      pure_matchest = reportPureMatches(matchobsq, ccaLineEndingDouble)
+      writeFile(filepath_purematchest, pure_matchest)    
+      if projectst != "":
+
+        var cumul_tekst: string 
+        if fileExists(filepath_cumulativest):
+          cumul_tekst = readFile(filepath_cumulativest)
+          cumul_tekst &= "\p" & pure_matchest
+        else:
+          cumul_tekst = pure_matchest
+        writeFile(filepath_cumulativest, cumul_tekst)
 
 
 
@@ -1144,6 +1194,7 @@ proc processCommandLine() =
     skipeu: Skippings = skipNothing
     boundary_lengthit: int = 30
     use_alternate_sourcesbo: bool = false
+    projectst: string = ""
 
   try:
     echo "----------------------------------------------------"
@@ -1192,13 +1243,20 @@ proc processCommandLine() =
 
         of "h", "help":
           procst = "echoHelpInfo"
+
+        of "p", "project":
+          if val != "":
+            projectst = val
+          else:
+            echo "You entered an empty project-name; the cumulative matches-file cannot be updated."
+
       of cmdEnd: 
         assert(false) # cannot happen
 
 
     case procst
     of "saveAndEchoResults":
-      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit)
+      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit, projectst = projectst)
     of "echoHelpInfo":
       echoHelpInfo()
 
@@ -1252,25 +1310,31 @@ else:
   #-----------------------------------------
   #echo findCommonSubstrings("xxxschaapyyy", "schaep", 3, 90)
   #-------------------------------
-  var 
-    testsq: seq[LineMatch]
-    fuzzit: int = 100
-  echo "\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-  testsq = findLinematches("01.txt","02.txt", 15, fuzzit)
-  echo "===========================================================\p"
-  for x in testsq:
-    echo x
-    echo "-----------------------------------------"
-  echo "===========================================================\p"
+  #var 
+  #  testsq: seq[LineMatch]
+  #  fuzzit: int = 100
+  #echo "\p~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+  #testsq = findLinematches("01.txt","02.txt", 15, fuzzit)
+  #echo "===========================================================\p"
+  #for x in testsq:
+  #  echo x
+  #  echo "-----------------------------------------"
+  #echo "===========================================================\p"
 
-  var sobsq: seq[StringMatch]
-  sobsq = convertToStringMatches(testsq, "01.txt","02.txt", fuzzit)
-  for ob in sobsq:
-    echo ob
-    echo "-----------------------------------------"
-
+  #var sobsq: seq[StringMatch]
+  #sobsq = convertToStringMatches(testsq, "01.txt","02.txt", fuzzit)
+  #for ob in sobsq:
+  #  echo ob
+  #  echo "-----------------------------------------"
 
   # "---------------------------------------------"
   #generateTestFile()
 
+
+  #--------------------------------
+  var sq: seq[string] = @[" aap ", "3noot5", "a mies p", "    ", "  das   ", "...kat,,"]
+  for st in sq:
+    echo "_" & st & "_"
+    echo trimToFullWords("_" & st & "_")
+  #--------------------------------
 

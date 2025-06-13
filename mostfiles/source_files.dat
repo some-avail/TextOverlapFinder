@@ -1,5 +1,16 @@
-some-file
-*alt_sources/01_middel.txt
-*alt_sources/02_middel.txt
-some-other-file
+name-advice:folder/project_subject_source_author_pubtime.txt
+alt_sources/01_middel.txt
+alt_sources/02_middel.txt
+
+
+alt_sources/01_fors.txt
+alt_sources/01_groot.txt
+*alt_sources/01_letter-test.txt
+alt_sources/01_middel.txt
+alt_sources/01_test.txt
+alt_sources/02_fors.txt
+alt_sources/02_groot.txt
+*alt_sources/02_letter-test.txt
+alt_sources/02_middel.txt
+alt_sources/02_test.txt
 
