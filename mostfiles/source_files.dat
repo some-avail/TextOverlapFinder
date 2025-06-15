@@ -1,16 +1,25 @@
-name-advice:folder/project_subject_source_author_pubtime.txt
-alt_sources/01_middel.txt
-alt_sources/02_middel.txt
+For use with the following option:
+-u or --use-alternate-source; example -u
 
+Instead of the text-files 01.txt and 02.txt, use marked files from the file-list "source_files.dat". Marking is done by prefixing an asterisk before the two files you want to compare. The first two encountered marked ones will be used, others will be discarded. If not two files are pre-starred the program will report that and exit. No space between asterisk and filename is allowed.
+
+prescribed format:
+alt-folder/some-file.txt___www.webaddress.org
+(the webaddress can be postfixed since Tof 2.16 and is ignored)
+
+file-naming option: alt-folder/project_subject_source_author_pubtime.txt
+
+
+Examples:
 
 alt_sources/01_fors.txt
-alt_sources/01_groot.txt
-*alt_sources/01_letter-test.txt
-alt_sources/01_middel.txt
-alt_sources/01_test.txt
 alt_sources/02_fors.txt
+alt_sources/01_groot.txt
 alt_sources/02_groot.txt
-*alt_sources/02_letter-test.txt
-alt_sources/02_middel.txt
+alt_sources/01_letter-test.txt___www.i-am-ignored-since-tof-2.16.net
+alt_sources/02_letter-test.txt___www.source-website.org
+*alt_sources/01_middel.txt
+*alt_sources/02_middel.txt
+alt_sources/01_test.txt
 alt_sources/02_test.txt
 

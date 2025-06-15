@@ -21,7 +21,7 @@ mostfiles/*
 mostfiles/jolibs/generic/
 !mostfiles/jolibs/generic/g_templates.nim
 
-
+mostfiles/oud_spul/
 mostfiles/previous_comparisons/
 *.txt
 !01.txt

@@ -49,21 +49,43 @@ Normally accuracy is 100 % meaning no match-deviations are allowed.
 When smaller that 100 (%), lets say 80 %, only 80 % of the characters must be matching.
 (there are also other factors considered.)
 Thus a fuzzy comparison arises (for now only beta-quality). Defaults to 100.
-
+-----------------------------------------------------------------
 -b or --boundary_insertion_type; example -b:20
 
 The number indicates the boundary-length between short and long overlap-indicators / mark-ups. 
 In the example, matches smaller than 20 are given small mark-ups, 
 matches larger than 20 are given large mark-ups.
-
+-----------------------------------------------------------------
 -l or --length-minimum; example -l:20
 
 You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
+-----------------------------------------------------------------
 
--s or --skip-part; example -s:e
+-p or --project; example -p:yourproject
 
-only one skippable item exists yet: e, or echo_file_insertions
-usefull when you are only interested in the matches to be printed to the screen.
+Adding a project-name enables Tof to create two extra files to collect the matches from multiple comparisons. The files are:
+
+1) project_yourproject_cumulative-matches.txt, and
+2) project_yourproject_cumulative-matches_processed.txt
+
+File 1 expands as new matches are added. File 2 is reworking of file 1 by trimming borders, removing dupicates and sorting the result. Available for Tof >= 2.16.
+-----------------------------------------------------------------
+
+-s or --skip-part; 
+
+examples: 
+-s:e
+-s:e,a
+-s:s
+--skip-part:write_any_file
+
+The following skippable items exist: 
+* e, or echo_file_insertions - meaning skip on-screen rendering of the first file with inserted matches (show only the matches themselves on-screen).
+* a, or write_any_file - meaning skip writing / saving any file, either first or second (reverse) pass (only show results to screen)
+* s, or write_second_file - meaning skip writing / saving files of the reverse processing (skip the reverse pass and the saving of files in that pass)
+
+This option allows multiple skippings separated by a comma as seen in the examples. File-writes are skippable from Tof >= 2.16.
+-----------------------------------------------------------------
 
 -u or --use-alternate-source; example -u
 

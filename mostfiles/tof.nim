@@ -9,7 +9,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.13
+var versionfl: float = 2.16
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -69,9 +69,11 @@ type
     whFileTwo
     whBothFiles
 
+
   Skippings = enum
-    skipNothing
     skipEchoFileInsertions
+    skipWriteAny
+    skipWriteSecond
 
 var 
   afiledata: Table[int, FileLineData]
@@ -888,6 +890,14 @@ matches larger than 20 are given large mark-ups.
 
 You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
 
+-p or --project; example -p:yourproject
+
+Adding a project-name enables Tof to create two extra files to collect the matches from multiple comparisons.:
+1) project_yourproject_cumulative-matches.txt, and
+2) project_yourproject_cumulative-matches_processed.txt
+
+File 1 expands as new matches are added. File 2 is reworking of file 1 by trimming borders, removing dupicates and sorting the result.
+
 -s or --skip-part; example -s:e
 
 only one skippable item exists yet: e, or echo_file_insertions
@@ -952,9 +962,77 @@ proc reportPureMatches(matchobsq: seq[Match]; styleeu: ConCatStyle = ccaLineEndi
   result = matcheslist
 
 
+proc filterOutForbiddenChars(mainst: string; forbiddense: set[char]): string = 
+
+  var outputst: string
+
+  for charst in mainst:
+    if charst notin forbiddense:
+      outputst.add(charst)
+
+  result = outputst
 
 
-proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skippartseu: Skippings = skipNothing, boundary_lengthit: int = 40; projectst = "") = 
+
+proc trimPhraseBoundaries(phrasest: string; min_boundary_frag_sizeit: int): string =
+  #[
+    trimmings:
+    -boundary-fragments like "s embassy"
+    -special chars like " ", ".", ","
+    -boundary-spaces
+  ]#
+
+  var firstphrasest, secphrasest, thirdphrasest: string
+
+  firstphrasest = phrasest
+
+  secphrasest = firstphrasest.filterOutForbiddenChars({',', '.', ';', ':'})
+  
+  thirdphrasest = secphrasest.strip()
+
+  # trim boundary-frags
+  var phrasepartsq: seq[string]
+  phrasepartsq = thirdphrasest.split()
+  
+  if phrasepartsq.len > 1:
+    if phrasepartsq[0].len < min_boundary_frag_sizeit:
+      phrasepartsq.delete(0)
+
+  if phrasepartsq.len > 1:      
+    if phrasepartsq[phrasepartsq.high].len < min_boundary_frag_sizeit:
+      phrasepartsq.delete(phrasepartsq.high)
+
+  result = phrasepartsq.join(" ")
+
+
+
+
+proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding): string = 
+
+  # concerns the files project_someproject_accumulative-matches.txt
+
+  # copy tekst to sequence
+  var linesq, matchsq: seq[string]
+  linesq = tekst.splitLines()
+  # copy non-empty and unique lines to seq
+  var trimst: string
+  for mst in linesq:
+    if mst.len > 0 and "=====" notin mst:
+      trimst = trimPhraseBoundaries(mst, 3)
+      if trimst notin matchsq:
+        matchsq.add(trimst)
+  # sort elements
+  matchsq.sort()
+  # recreate a tekst
+  var matcheslist: string
+  for mst in matchsq:
+    matcheslist = ccat(matcheslist, mst, styleeu)
+
+  result = matcheslist
+
+
+
+proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skipse: set[Skippings] = {}, boundary_lengthit: int = 40; projectst = "") = 
   #[
     run the program
   ]#
@@ -1009,8 +1087,8 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
 
     if starlisq.len >= 2:
       # open file 1 and 2 using the toppal starred items
-      alt_filename1st = starlisq[0].split("*")[1]
-      alt_filename2st = starlisq[1].split("*")[1]
+      alt_filename1st = starlisq[0].split("*")[1].split("___")[0]
+      alt_filename2st = starlisq[1].split("*")[1].split("___")[0]
       altnamepart1st = extractFilename(alt_filename1st)
       altnamepart2st = extractFilename(alt_filename2st)
       tmp1st = readFile(alt_filename1st)
@@ -1073,97 +1151,114 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     echo ""
     echo overlap1st
 
-    compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit, "FIRST")
-    
-    createDir(subdirst)
 
-    timestampst = format(now(), "yyyyMMdd'_'HHmm")
-
-    if not use_alternate_sourcesbo:
-
-      firstchars01st = safeSlice(cleanFile(text1st), 50)
-      firstchars02st = safeSlice(cleanFile(text2st), 50)
-
-      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & firstchars01st & ".txt" 
-      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & firstchars02st & ".txt" 
-
-      filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & firstchars01st & ".txt"
-      filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & firstchars02st & ".txt"
-
-    else:     # use alternate source-list
-
-      firstchars01st = safeSlice(cleanFile(text1st), 25)
-      firstchars02st = safeSlice(cleanFile(text2st), 25)
-
-      filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & altnamepart1st & "_" & firstchars01st & ".txt" 
-      filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & altnamepart2st & "_" & firstchars02st & ".txt" 
-
-      filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & altnamepart1st & "_" & firstchars01st & ".txt"
-      filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & altnamepart2st & "_" & firstchars02st & ".txt"
+    if skipEchoFileInsertions notin skipse and skipWriteAny notin skipse:
+      compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit, "FIRST")
 
 
-    filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
-    filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
-    
-    var filepath_purematchest: string
-    filepath_purematchest = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_pure-matches.txt"
-    var filepath_cumulativest: string
-    filepath_cumulativest = subdirst & "/project_" & projectst & "_accumulative-matches.txt"
+    if skipWriteAny notin skipse:
 
-    if not use_alternate_sourcesbo:
-      copyFile("01.txt", filepath_original_01tekst)
-      copyFile("02.txt", filepath_original_02tekst)
-    else:
-      copyFile(alt_filename1st, filepath_original_01tekst)
-      copyFile(alt_filename2st, filepath_original_02tekst)
+      createDir(subdirst)
 
+      timestampst = format(now(), "yyyyMMdd'_'HHmm")
 
-    writeFile(filepath_overlap1st, overlap1st)
-    writeFile(filepath_compared_01tekst, compared_01tekst)
-
-    if fuzzypercentit == 100:
-      pure_matchest = reportPureMatches(matchobsq, ccaLineEndingDouble)
-      writeFile(filepath_purematchest, pure_matchest)    
+      var project_namest: string
       if projectst != "":
+        project_namest = projectst & "_"
+      else:
+        project_namest = ""
 
-        var cumul_tekst: string 
-        if fileExists(filepath_cumulativest):
-          cumul_tekst = readFile(filepath_cumulativest)
-          cumul_tekst &= "\p" & pure_matchest
-        else:
-          cumul_tekst = pure_matchest
-        writeFile(filepath_cumulativest, cumul_tekst)
 
+      if not use_alternate_sourcesbo:
+
+        firstchars01st = safeSlice(cleanFile(text1st), 50)
+        firstchars02st = safeSlice(cleanFile(text2st), 50)
+
+        filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & project_namest & firstchars01st & ".txt" 
+        filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & project_namest & firstchars02st & ".txt" 
+
+        filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & project_namest & firstchars01st & ".txt"
+        filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & project_namest & firstchars02st & ".txt"
+
+      else:     # use alternate source-list
+
+        firstchars01st = safeSlice(cleanFile(text1st), 25)
+        firstchars02st = safeSlice(cleanFile(text2st), 25)
+
+        filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & project_namest & altnamepart1st & "_" & firstchars01st & ".txt" 
+        filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & project_namest & altnamepart2st & "_" & firstchars02st & ".txt" 
+
+        filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & project_namest & altnamepart1st & "_" & firstchars01st & ".txt"
+        filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & project_namest & altnamepart2st & "_" & firstchars02st & ".txt"
+
+
+      filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
+      filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
+      
+      var filepath_purematchest: string
+      filepath_purematchest = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_pure-matches.txt"
+      var filepath_cumulativest: string
+      filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
+      var filepath_cumul_processed: string
+      filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
+
+
+
+      if not use_alternate_sourcesbo:
+        copyFile("01.txt", filepath_original_01tekst)
+        copyFile("02.txt", filepath_original_02tekst)
+      else:
+        copyFile(alt_filename1st, filepath_original_01tekst)
+        copyFile(alt_filename2st, filepath_original_02tekst)
+
+
+      writeFile(filepath_overlap1st, overlap1st)
+      writeFile(filepath_compared_01tekst, compared_01tekst)
+
+      if fuzzypercentit == 100:
+        pure_matchest = reportPureMatches(matchobsq, ccaLineEndingDouble)
+        writeFile(filepath_purematchest, pure_matchest)    
+        if projectst != "":
+
+          var cumul_tekst: string 
+          if fileExists(filepath_cumulativest):
+            cumul_tekst = readFile(filepath_cumulativest)
+            cumul_tekst &= "\p=========================================\p" & pure_matchest
+          else:
+            cumul_tekst = pure_matchest
+          writeFile(filepath_cumulativest, cumul_tekst)
+
+          writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEndingDouble))
 
 
     # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
     # ? todo: instead reuse the existing one and resort
     
-    #let reverse_matchobsq = findCommonSubstrings(text2st, text1st, minLen, fuzzypercentit)
+    if (skipWriteSecond notin skipse) and (skipWriteAny notin skipse):
 
-    var reverse_lmobsq: seq[LineMatch]
-    echo "--------------------------------------------"
-    echo "Running reverse comparison..."
-    echo "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\p"
+      var reverse_lmobsq: seq[LineMatch]
+      echo "--------------------------------------------"
+      echo "Running reverse comparison..."
+      echo "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv\p"
 
-    reverse_lmobsq = findLinematches(filename2st, filename1st, minLen, fuzzypercentit)
-    let reverse_matchobsq = newToOldMatch(convertToStringMatches(reverse_lmobsq, filename2st, filename1st, fuzzypercentit))
+      reverse_lmobsq = findLinematches(filename2st, filename1st, minLen, fuzzypercentit)
+      let reverse_matchobsq = newToOldMatch(convertToStringMatches(reverse_lmobsq, filename2st, filename1st, fuzzypercentit))
 
-    overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
-    writeFile(filepath_overlap2st, overlap2st)
+      overlap2st = reportOverlap(text2st, text1st, reverse_matchobsq, minLen, true, fuzzypercentit)
+      writeFile(filepath_overlap2st, overlap2st)
 
-    compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit, "SECOND")
-    writeFile(filepath_compared_02tekst, compared_02tekst)
+      compared_02tekst = markOverlapsInFile(text2st, text1st, minLen, reverse_matchobsq, boundary_lengthit, "SECOND")
+      writeFile(filepath_compared_02tekst, compared_02tekst)
 
 
-
-    if not (skippartseu == skipEchoFileInsertions):
+    if skipEchoFileInsertions notin skipse:
       echo compared_01tekst
 
+    if skipWriteAny notin skipse:
+      messagest = "Files were written to the following subdirectory: " & subdirst
+      echo "##################################################################################"
+      echo messagest
 
-    messagest = "Files were written to the following subdirectory: " & subdirst
-    echo "##################################################################################"
-    echo messagest
   else:
     if not use_alternate_sourcesbo and (tmp1st == "" or tmp2st == ""):
       echo "One or both files (01.txt and/or 02.txt) is empty; please input texts to compare. \pProgram tof exiting..."
@@ -1191,10 +1286,22 @@ proc processCommandLine() =
     #----------------------------------
     lengthit: int = 0
     fuzzypercentit: int = 100
-    skipeu: Skippings = skipNothing
     boundary_lengthit: int = 30
     use_alternate_sourcesbo: bool = false
     projectst: string = ""
+
+    skipse: set[Skippings] = {}
+    # table for mapping options to enums
+    skipta: Table[string, Skippings]
+
+  skipta["e"] = skipEchoFileInsertions
+  skipta["echo_file_insertions"] = skipEchoFileInsertions
+  skipta["a"] = skipWriteAny
+  skipta["write_any_file"] = skipWriteAny
+  skipta["s"] = skipWriteSecond
+  skipta["write_second_file"] = skipWriteSecond
+
+
 
   try:
     echo "----------------------------------------------------"
@@ -1234,9 +1341,12 @@ proc processCommandLine() =
             echo "You entered the length-key(-l), but not a valid value (valid is like: -l:20). \pYou can input manually now..."
 
         of "s", "skip-part":
-          case val:
-          of "e", "echo_file_insertions":
-            skipeu = skipEchoFileInsertions
+          if val != "":
+            for skipvalst in val.split(','):
+              skipse.incl(skipta[skipvalst])
+          else:
+            echo "No skip-parts entered. Nothing will be skipped..."
+
 
         of "u", "use-alternate-source":
           use_alternate_sourcesbo = true
@@ -1256,7 +1366,7 @@ proc processCommandLine() =
 
     case procst
     of "saveAndEchoResults":
-      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skippartseu = skipeu, boundary_lengthit = boundary_lengthit, projectst = projectst)
+      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skipse = skipse, boundary_lengthit = boundary_lengthit, projectst = projectst)
     of "echoHelpInfo":
       echoHelpInfo()
 
