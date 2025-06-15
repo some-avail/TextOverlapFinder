@@ -42,26 +42,26 @@ Tof 2.0 is a new version of tof that can handle larger files. Tof <= 1 could not
 ### Commands and options
 
 You can run the exec without options, but there are also the following options available:
-
+<pre>```
 -a or --accuracy; example -a:80
 
 Normally accuracy is 100 % meaning no match-deviations are allowed.
 When smaller that 100 (%), lets say 80 %, only 80 % of the characters must be matching.
 (there are also other factors considered.)
 Thus a fuzzy comparison arises (for now only beta-quality). Defaults to 100.
----
+-----------------------------------------------------------------
 
 -b or --boundary_insertion_type; example -b:20
 
 The number indicates the boundary-length between short and long overlap-indicators / mark-ups. 
 In the example, matches smaller than 20 are given small mark-ups, 
 matches larger than 20 are given large mark-ups.
----
+-----------------------------------------------------------------
 
 -l or --length-minimum; example -l:20
 
 You can input the minimal lenghth of matching strings to be included in the list of matches. start with like 15 and experiment for the results. Defaults to 15.
----
+-----------------------------------------------------------------
 
 -p or --project; example -p:yourproject
 
@@ -71,7 +71,7 @@ Adding a project-name enables Tof to create two extra files to collect the match
 2) project_yourproject_cumulative-matches_processed.txt
 
 File 1 expands as new matches are added. File 2 is reworking of file 1 by trimming borders, removing dupicates and sorting the result. Available for Tof >= 2.16.
----
+-----------------------------------------------------------------
 
 -s or --skip-part; 
 
@@ -87,11 +87,13 @@ The following skippable items exist:
 * s, or write_second_file - meaning skip writing / saving files of the reverse processing (skip the reverse pass and the saving of files in that pass)
 
 This option allows multiple skippings separated by a comma as seen in the examples. File-writes are skippable from Tof >= 2.16.
----
+-----------------------------------------------------------------
 
 -u or --use-alternate-source; example -u
 
 Instead of the text-files 01.txt and 02.txt, use marked files from the file-list "source_files.dat". Marking is done by prefixing an asterisk * before the two files you want to compare. The first two encountered marked ones will be used, others will be discarded. If not two files are pre-starred the program will report that and exit. No space between asterisk and filename is allowed.
+
+```</pre>
 
 
 ### Output
