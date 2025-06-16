@@ -9,7 +9,7 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.16
+var versionfl: float = 2.17
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -702,7 +702,7 @@ proc cleanFile(mainst: string; cleanStyleu: CleanStyle = cleanAllButStripes): st
 
 
 
-proc safeSlice(mainst: string; slicesizeit: int): string =
+proc safeSlice(mainst: string; slicesizeit: int; filloutbo: bool = false; filloutcharch: char = ' '): string =
 
   # this concerns a frontal slice
   # one that is independent of size of mainst
@@ -711,10 +711,24 @@ proc safeSlice(mainst: string; slicesizeit: int): string =
     if mainst.len >= slicesizeit:
       result = mainst[0..slicesizeit-1]
     else:
-      result = mainst
+      if filloutbo:
+        var repeatit: int = slicesizeit - mainst.len
+        result = mainst & filloutcharch.repeat(repeatit)
+      else:
+        result = mainst
   else:
     result = ""
 
+
+
+
+proc sliceFactory(newfilloutcharch: char = ' '): proc(mainst: string; slicesizeit: int): string =
+  result = proc(mainst: string; slicesizeit: int): string =
+    result = safeSlice(mainst, slicesizeit, true, newfilloutcharch)
+
+
+let sliSpace = sliceFactory(' ')
+let sliHyphen = sliceFactory('-')
 
 
 
@@ -1203,7 +1217,6 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
 
 
-
       if not use_alternate_sourcesbo:
         copyFile("01.txt", filepath_original_01tekst)
         copyFile("02.txt", filepath_original_02tekst)
@@ -1258,6 +1271,34 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       messagest = "Files were written to the following subdirectory: " & subdirst
       echo "##################################################################################"
       echo messagest
+
+      # comparison-registry-file
+      var filepath_registry, registry_linest: string
+      filepath_registry = subdirst & "/registry_of_comparisons.txt"
+      const sepst = "__"
+
+      if not use_alternate_sourcesbo:
+        echo "not use_alternate_sourcesbo"
+        firstchars01st = safeSlice(cleanFile(text1st), 25, true, '-')
+        firstchars02st = safeSlice(cleanFile(text2st), 25, true, '-')
+
+        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & "01.txt (=" & firstchars01st & ")" & sepst & "02.txt (=" & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
+
+      else:     # use alternate source-list
+        echo "use alternate"
+        firstchars01st = safeSlice(cleanFile(text1st), 15, true, '-')
+        firstchars02st = safeSlice(cleanFile(text2st), 15, true, '-')
+
+        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & altnamepart1st & " (=" & firstchars01st & ")" & sepst & altnamepart2st & " (="  & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
+
+      var registry_tekst: string 
+      if fileExists(filepath_registry):
+        registry_tekst = readFile(filepath_registry)
+        registry_tekst &= "\p" & registry_linest
+      else:
+        registry_tekst = registry_linest
+      writeFile(filepath_registry, registry_tekst)
+
 
   else:
     if not use_alternate_sourcesbo and (tmp1st == "" or tmp2st == ""):

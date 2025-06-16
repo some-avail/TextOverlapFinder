@@ -102,8 +102,8 @@ of the reverse processing
 (skip the reverse pass and the saving of files in that pass)
 
 This option allows multiple skippings separated 
-by a comma as seen in the examples. F
-ile-writes are skippable from Tof >= 2.16.
+by a comma as seen in the examples. 
+File-writes are skippable from Tof >= 2.16.
 -----------------------------------------------------------------
 
 -u or --use-alternate-source; example -u
