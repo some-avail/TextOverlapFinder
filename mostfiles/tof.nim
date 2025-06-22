@@ -9,7 +9,10 @@ import std/private/[osdirs,osfiles]
 #import unicode
 import jolibs/generic/[g_templates]
 
-var versionfl: float = 2.17
+import nimclipboard/libclipboard
+
+
+var versionfl: float = 2.173
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -64,13 +67,9 @@ type
     cleanSingleWhiteSpace   # remove all white-repetition
 
 
-  WhichFilesToProcess = enum
-    whFileOne
-    whFileTwo
-    whBothFiles
-
 
   Skippings = enum
+    skipNothing               # this one must remove all skippings
     skipEchoFileInsertions
     skipWriteAny
     skipWriteSecond
@@ -759,7 +758,7 @@ proc markOverlapsInFile(first, secondst: string; minLengthit: int; matchobsq: se
   var curposit: int = 0
   var previousposit: int = 0
   var overlapstartst: string = "\p<br>======================overlap-start===========================\p"
-  var overlapsendst: string =  "\p----------------------overlap-end-----------------------------\p"
+  var overlapsendst: string =  "\p<br>----------------------overlap-end-----------------------------\p"
   var shortoverlapstartst: string = " ~**** "
   var shortoverlapendst: string = " ****~ "
 
@@ -1021,7 +1020,7 @@ proc trimPhraseBoundaries(phrasest: string; min_boundary_frag_sizeit: int): stri
 
 
 
-proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding): string = 
+proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 15): string = 
 
   # concerns the files project_someproject_accumulative-matches.txt
 
@@ -1033,8 +1032,9 @@ proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLine
   for mst in linesq:
     if mst.len > 0 and "=====" notin mst:
       trimst = trimPhraseBoundaries(mst, 3)
-      if trimst notin matchsq:
-        matchsq.add(trimst)
+      if trimst.len >= min_phrase_lengthit:
+        if trimst notin matchsq:
+          matchsq.add(trimst)
   # sort elements
   matchsq.sort()
   # recreate a tekst
@@ -1046,7 +1046,27 @@ proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLine
 
 
 
-proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToProcess = whBothFiles; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skipse: set[Skippings] = {}, boundary_lengthit: int = 40; projectst = "") = 
+proc splitString(fromclipst: string): (string, string) =
+
+  # split a string in half and return both halfs
+
+  var 
+    #first, secst: string
+    halfit: int
+
+
+  if fromclipst.len == 0:
+    result = ("","")
+  elif fromclipst.len == 1:
+    result = (fromclipst, "")
+  else:
+    halfit = fromclipst.len div 2
+    result = (fromclipst[0 .. halfit], fromclipst[halfit + 1 .. fromclipst.len - 1])
+
+
+
+
+proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skipse: set[Skippings] = {}, boundary_lengthit: int = 40; projectst = ""; internalcompbo: bool = false) = 
   #[
     run the program
   ]#
@@ -1090,6 +1110,29 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     altnamepart1st, altnamepart2st: string
 
   const source_filenamest = "source_files.dat"
+
+
+  if internalcompbo:
+    # split the string from the clipboard and use the parts as files to compare
+
+    var 
+     first_internalst, sec_internalst, fromclipst: string
+     clipob = clipboard_new(nil)
+
+    fromclipst = $clipob.clipboard_text()
+
+    (first_internalst, sec_internalst) = splitString(fromclipst)
+    writeFile(filename_orig_1st, first_internalst)
+    writeFile(filename_orig_2st, sec_internalst)
+
+    #if skipNothing in skipse:
+    #  skipse = {}
+    #else:
+    #  if skipWriteAny notin skipse:
+    #    skipse.incl(skipWriteAny)
+
+
+
 
 
   if use_alternate_sourcesbo:
@@ -1166,7 +1209,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
     echo overlap1st
 
 
-    if skipEchoFileInsertions notin skipse and skipWriteAny notin skipse:
+    if skipEchoFileInsertions notin skipse:
       compared_01tekst = markOverlapsInFile(text1st, text2st, minLen, matchobsq, boundary_lengthit, "FIRST")
 
 
@@ -1229,7 +1272,7 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
       writeFile(filepath_compared_01tekst, compared_01tekst)
 
       if fuzzypercentit == 100:
-        pure_matchest = reportPureMatches(matchobsq, ccaLineEndingDouble)
+        pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
         writeFile(filepath_purematchest, pure_matchest)    
         if projectst != "":
 
@@ -1239,9 +1282,9 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
             cumul_tekst &= "\p=========================================\p" & pure_matchest
           else:
             cumul_tekst = pure_matchest
-          writeFile(filepath_cumulativest, cumul_tekst)
 
-          writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEndingDouble))
+          writeFile(filepath_cumulativest, cumul_tekst)
+          writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 14))
 
 
     # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
@@ -1282,14 +1325,16 @@ proc saveAndEchoResults(minlengthit: int = 0; file_to_processeu: WhichFilesToPro
         firstchars01st = safeSlice(cleanFile(text1st), 25, true, '-')
         firstchars02st = safeSlice(cleanFile(text2st), 25, true, '-')
 
-        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & "01.txt (=" & firstchars01st & ")" & sepst & "02.txt (=" & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
+        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & "01.txt (=" & firstchars01st & ")" & sepst & "02.txt (=" & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "bound: " & $boundary_lengthit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
+
+
 
       else:     # use alternate source-list
         echo "use alternate"
         firstchars01st = safeSlice(cleanFile(text1st), 15, true, '-')
         firstchars02st = safeSlice(cleanFile(text2st), 15, true, '-')
 
-        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & altnamepart1st & " (=" & firstchars01st & ")" & sepst & altnamepart2st & " (="  & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
+        registry_linest = sliHyphen(projectst, 10) & sepst & timestampst & sepst & altnamepart1st & " (=" & firstchars01st & ")" & sepst & altnamepart2st & " (="  & firstchars02st & ")" & sepst & "accur.: " & $fuzzypercentit & sepst & "bound: " & $boundary_lengthit & sepst & "minlen: " & $minLen & sepst & "matches: " & $matchobsq.len
 
       var registry_tekst: string 
       if fileExists(filepath_registry):
@@ -1334,6 +1379,7 @@ proc processCommandLine() =
     skipse: set[Skippings] = {}
     # table for mapping options to enums
     skipta: Table[string, Skippings]
+    internalcompbo: bool = false
 
   skipta["e"] = skipEchoFileInsertions
   skipta["echo_file_insertions"] = skipEchoFileInsertions
@@ -1374,6 +1420,13 @@ proc processCommandLine() =
           else:
             echo "You entered the boundary-value(-b), but not a valid value (valid is like: -b:20). \pUsing default..."
 
+        of "i", "internal_comp":
+
+          internalcompbo = true
+          if val != "":
+            echo "Value is not needed for internal comparison.."
+
+
         of "l", "length-minimum":
           if val != "" and val.all(isDigit):
             lengthit = parseInt(val)
@@ -1407,7 +1460,7 @@ proc processCommandLine() =
 
     case procst
     of "saveAndEchoResults":
-      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skipse = skipse, boundary_lengthit = boundary_lengthit, projectst = projectst)
+      saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skipse = skipse, boundary_lengthit = boundary_lengthit, projectst = projectst, internalcompbo = internalcompbo)
     of "echoHelpInfo":
       echoHelpInfo()
 
@@ -1483,9 +1536,24 @@ else:
 
 
   #--------------------------------
-  var sq: seq[string] = @[" aap ", "3noot5", "a mies p", "    ", "  das   ", "...kat,,"]
-  for st in sq:
-    echo "_" & st & "_"
-    echo trimToFullWords("_" & st & "_")
+  #var sq: seq[string] = @[" aap ", "3noot5", "a mies p", "    ", "  das   ", "...kat,,"]
+  #for st in sq:
+  #  echo "_" & st & "_"
+  #  echo trimToFullWords("_" & st & "_")
   #--------------------------------
+
+  #--------------------------------
+  #echo splitString("")
+  #echo splitString("a")
+  #echo splitString("ab")
+  #echo splitString("abc")
+  #--------------------------------
+
+
+  var 
+   fromclipst: string
+   clipob = clipboard_new(nil)
+
+  fromclipst = $clipob.clipboard_text()
+  echo fromclipst
 
