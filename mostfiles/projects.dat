@@ -1,0 +1,17 @@
+
+The make a project active,  it must be prefixed with an asterisk / star / *. 
+Submit a path where the tof-data must be stored for the project separated with 3 underscores. 
+After the given path a default subdir "tof_data" will be appended programatically. 
+
+For the active project, all input and output will be expected and stored there, 
+except for this file and the executable. 
+Only one project can be pre-starred and will be active; following stars will be ignored. 
+Removing all stars will reset the data-dir to the executable-dir.
+
+
+
+projectname___path/to/some/subdir
+otherproject___path/to/otherproject
+*testproject01___./testproject
+
+

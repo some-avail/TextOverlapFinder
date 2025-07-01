@@ -4,7 +4,7 @@
 
 
 import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os]
-import std/private/[osdirs,osfiles]
+#import std/private/[osdirs, osfiles]
 
 #import unicode
 import jolibs/generic/[g_templates]
@@ -12,7 +12,7 @@ import jolibs/generic/[g_templates]
 import nimclipboard/libclipboard
 
 
-var versionfl: float = 2.173
+var versionfl: float = 2.18
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -1020,7 +1020,7 @@ proc trimPhraseBoundaries(phrasest: string; min_boundary_frag_sizeit: int): stri
 
 
 
-proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 15): string = 
+proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 8): string = 
 
   # concerns the files project_someproject_accumulative-matches.txt
 
@@ -1065,11 +1065,84 @@ proc splitString(fromclipst: string): (string, string) =
 
 
 
+proc getActiveProject(extra_tof_dirst: string = ""): (string, string) = 
+
+  # from the file projects.dat return tuple like (active-project, project-path)
+
+  withFileAdvanced(fileob, "projects.dat", fmRead):
+
+    var 
+      projectdatast, activeprojectst, projectpathst: string
+
+    result = ("", "")
+
+    for linest in fileob.lines:
+      if linest.len > 0:
+        if linest.startswith("*"):
+          projectdatast = linest.split("*")[1]
+
+          activeprojectst = projectdatast.split("___")[0]
+          projectpathst = projectdatast.split("___")[1]
+
+          if extra_tof_dirst != "":
+            projectpathst = projectpathst / extra_tof_dirst
+
+          result = (activeprojectst, projectpathst)
+
+
+
+
+
+proc prefixFilePathConditionally(currentpathst, prefixpathst: string): string =
+
+  if prefixpathst != "":
+    result = prefixpathst / currentpathst
+  else:
+    result = currentpathst
+
+
+
+template pfc(x: varargs[untyped]): untyped = 
+  # aliasing above proc
+  prefixFilePathConditionally(x)
+
+
+
+
+proc makeFilesFromList(filepathlisq, contentsq: seq[string]) = 
+
+  # make files if not existing
+  
+  var countit: int = 0
+  for filepathst in filepathlisq:
+    if not fileExists(filepathst):
+      writeFile(filepathst, contentsq[countit])
+      echo "Created file: " & filepathst
+    countit += 1
+
+
 
 proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = false; verbosebo: bool = true; fuzzypercentit: int = 100; skipse: set[Skippings] = {}, boundary_lengthit: int = 40; projectst = ""; internalcompbo: bool = false) = 
+
   #[
     run the program
   ]#
+
+  var activeprojectst, projectpathst, ppst: string 
+  (activeprojectst, projectpathst) = getActiveProject()
+  # shorter alias:
+  ppst = projectpathst
+
+  if activeprojectst != "":
+    createDir(projectpathst)
+    echo "\p----------------------"
+    echo "Using active (starred) project: " & activeprojectst
+    echo "Project-path: " & projectpathst
+    echo "See the file projects.dat in the executable dir for more info.."
+    echo "----------------------"
+  else:
+    echo "No active project selected (in file projects.dat)..."
+
 
 
   var minLen: int = 15
@@ -1109,7 +1182,19 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
     alter_invalidbo: bool = false
     altnamepart1st, altnamepart2st: string
 
-  const source_filenamest = "source_files.dat"
+    source_filenamest: string = "source_files.dat"
+    subdirst = "previous_comparisons"
+
+
+  filename_orig_1st = pfc(filename_orig_1st, ppst)
+  filename_orig_2st = pfc(filename_orig_2st, ppst)    
+  filename1st = pfc(filename1st, ppst)
+  filename2st = pfc(filename2st, ppst)
+  source_filenamest = pfc(source_filenamest, ppst)
+  subdirst = pfc(subdirst, ppst)
+
+
+  makeFilesFromList(@[filename_orig_1st,filename_orig_2st,source_filenamest], @["","","Instead of the text-files 01.txt and 02.txt, use marked files from the file-list source_files.dat with option -u. Marking is done by prefixing an asterisk before the two files you want to compare. List the files below."])
 
 
   if internalcompbo:
@@ -1125,14 +1210,6 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
     writeFile(filename_orig_1st, first_internalst)
     writeFile(filename_orig_2st, sec_internalst)
 
-    #if skipNothing in skipse:
-    #  skipse = {}
-    #else:
-    #  if skipWriteAny notin skipse:
-    #    skipse.incl(skipWriteAny)
-
-
-
 
 
   if use_alternate_sourcesbo:
@@ -1146,6 +1223,9 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
       # open file 1 and 2 using the toppal starred items
       alt_filename1st = starlisq[0].split("*")[1].split("___")[0]
       alt_filename2st = starlisq[1].split("*")[1].split("___")[0]
+      alt_filename1st = pfc(alt_filename1st, ppst)
+      alt_filename2st = pfc(alt_filename2st, ppst)
+
       altnamepart1st = extractFilename(alt_filename1st)
       altnamepart2st = extractFilename(alt_filename2st)
       tmp1st = readFile(alt_filename1st)
@@ -1190,7 +1270,6 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
     var 
       compared_01tekst, compared_02tekst: string
       messagest: string
-      subdirst = "previous_comparisons"
       filepath_original_01tekst, filepath_original_02tekst: string
       filepath_overlap1st, filepath_overlap2st, filepath_compared_01tekst, filepath_compared_02tekst: string
       timestampst: string
@@ -1231,11 +1310,14 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
         firstchars01st = safeSlice(cleanFile(text1st), 50)
         firstchars02st = safeSlice(cleanFile(text2st), 50)
 
-        filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & project_namest & firstchars01st & ".txt" 
+        filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_01_" & project_namest & firstchars01st & ".txt"
+
         filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_02_" & project_namest & firstchars02st & ".txt" 
 
         filepath_compared_01tekst = subdirst & "/" & timestampst & "_compared_01_" & project_namest & firstchars01st & ".txt"
+
         filepath_compared_02tekst = subdirst & "/" & timestampst & "_compared_02_" & project_namest & firstchars02st & ".txt"
+
 
       else:     # use alternate source-list
 
@@ -1243,26 +1325,42 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
         firstchars02st = safeSlice(cleanFile(text2st), 25)
 
         filepath_original_01tekst = subdirst & "/" & timestampst & "_orig_alt1_" & project_namest & altnamepart1st & "_" & firstchars01st & ".txt" 
+
+
         filepath_original_02tekst = subdirst & "/" & timestampst & "_orig_alt2_" & project_namest & altnamepart2st & "_" & firstchars02st & ".txt" 
 
         filepath_compared_01tekst = subdirst & "/" & timestampst & "_comp_alt1_" & project_namest & altnamepart1st & "_" & firstchars01st & ".txt"
         filepath_compared_02tekst = subdirst & "/" & timestampst & "_comp_alt2_" & project_namest & altnamepart2st & "_" & firstchars02st & ".txt"
 
 
+      #filepath_original_01tekst = pfc(filepath_original_01tekst, ppst)
+      #filepath_original_02tekst = pfc(filepath_original_02tekst, ppst)
+      #filepath_compared_01tekst = pfc(filepath_compared_01tekst, ppst)
+      #filepath_compared_02tekst = pfc(filepath_compared_02tekst, ppst)
+
+
       filepath_overlap1st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches01.txt"
       filepath_overlap2st = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_matches02.txt"
+      #filepath_overlap1st = pfc(filepath_overlap1st, ppst)
+      #filepath_overlap2st = pfc(filepath_overlap2st, ppst)
+
       
       var filepath_purematchest: string
       filepath_purematchest = subdirst & "/" & timestampst & "_tof-" & $versionfl & "_pure-matches.txt"
+      #filepath_purematchest = pfc(filepath_purematchest, ppst)
+
       var filepath_cumulativest: string
       filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
+      #filepath_cumulativest = pfc(filepath_cumulativest, ppst)
+
       var filepath_cumul_processed: string
       filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
+      #filepath_cumul_processed = pfc(filepath_cumul_processed, ppst)
 
 
       if not use_alternate_sourcesbo:
-        copyFile("01.txt", filepath_original_01tekst)
-        copyFile("02.txt", filepath_original_02tekst)
+        copyFile(filename_orig_1st, filepath_original_01tekst)
+        copyFile(filename_orig_2st, filepath_original_02tekst)
       else:
         copyFile(alt_filename1st, filepath_original_01tekst)
         copyFile(alt_filename2st, filepath_original_02tekst)
@@ -1550,10 +1648,19 @@ else:
   #--------------------------------
 
 
-  var 
-   fromclipst: string
-   clipob = clipboard_new(nil)
+  #var 
+  # fromclipst: string
+  # clipob = clipboard_new(nil)
 
-  fromclipst = $clipob.clipboard_text()
-  echo fromclipst
+  #fromclipst = $clipob.clipboard_text()
+  #echo fromclipst
+  #--------------------------------
+  #echo getActiveProject()
+  #--------------------------------
+  #let jp = joinPath
+
+  echo joinPath("/pad","bestand.txt")
+  echo pfc("aap/","noot")
+
+
 
