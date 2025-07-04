@@ -9,37 +9,56 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 
 - my primary use-case was to compare two journalistic stories on the same subject to see which parts overlap (are identical) and which are unique to each story.
 - larger overlaps usually point to a common source which both stories have used.
-- in scientific studies generally you can quickly assess the overlapping information, and by that the unique information being the rest.
+- in scientific studies generally you can quickly assess related texts to extend your collection of research-texts.
 - you can use the program to check for plagiarism.
 - from 0.68 onward you can use fuzzy compare. By that you can determine equal forms and subjects (aot equal / common sources). However the fuzzy comparison is still experimental concerning its beta-quality.
 
 
 ### Latest
 
-Tof 2.0 is a new version of tof that can handle larger files. Tof <= 1 could not handle large files and on Linux would be OOM-ed (out-of-memory (oom) killing of programs that use to much memory) for files > 40 K on my 8 GB laptop. Tof 2.0 now has a line-based algorithm that avoids much memory-usage.
+Tof 2.0 is a new version of tof that can handle larger files. Tof 2.0 now has a line-based algorithm that avoids much memory-usage.
+
 
 ### Installation
 
 - install Nim
-- tof has no external dependencies.
+- tof has since 2.17 one external dependencies (nimclipboard)
 - compile the with: nim c -d:release tof.nim
 - or compile and run in one pass: nim c -r tof.nim
 - run with: ./tof or ./tof.exe
 - futurally compilates may be delivered.
 
 
-### Usage
+### Basic usage
 
 - in the dir where you have placed the executable tof (linux) or tof.exe (windows), you must place the files:
   - 01.txt, and
   - 02.txt
-- in these text-files you must paste the texts you want compare for overlaps / matches.
+- in these text-files you must paste the texts you want to compare for overlaps / matches.
 - open a terminal and enter ./tof or ./tof.exe
 - upon running, you must enter the minimal length of strings you want to compare to become matches. (if you enter 3, then the word "the" would become a match, which would not be very usefull). Experiment with different lengths.
 - let the program run.
 
 
-### Commands and options
+### Projects
+
+Since tof 2.18 you can use projects, as defined in the file projects.dat. By placing a star * right before the project you can make a project active. Append a file-path (separated with 3 underscores) where the tof-data must be stored for the project.
+
+For the active project, all input and output will be expected and stored there, 
+except for the projects.dat file and the executable. 
+Only one project can be pre-starred and will be active; following stars will be ignored. 
+Removing all stars will reset the data-dir to the executable-dir.
+
+(btw this is different from the option -p:someproject which creates cumulative matches for all comps that use that option.)
+
+### Registry of comparisons
+
+A file registry_of_comparisons.txt is updated for every comparison whereby files are written to disk.
+(>= Tof 2.17)
+
+
+### Options for additional usage-possibilities
+
 
 You can run the exec without options, but there are also the following options available:
 ```
@@ -59,8 +78,17 @@ The number indicates the boundary-length between short and
 long overlap-indicators / mark-ups. 
 In the example, matches smaller than 20 are given small mark-ups, 
 matches larger than 20 are given large mark-ups.
------------------------------------------------------------------
 
+-----------------------------------------------------------------
+-i or --internal_comp
+
+Giving this option leads to an internal comparison, that is a comp. 
+of a text with itself. It means that text of the clipboard 
+is split in two halfs, these halfs are pasted in 01.txt and 02.txt, 
+after which the comparison is run.
+Thus a outline of the text arises. (from tof 2.173 onward)
+
+-----------------------------------------------------------------
 -l or --length-minimum; example -l:20
 
 You can input the minimal lenghth of matching strings to be 

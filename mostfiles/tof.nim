@@ -12,7 +12,7 @@ import jolibs/generic/[g_templates]
 import nimclipboard/libclipboard
 
 
-var versionfl: float = 2.18
+var versionfl: float = 2.1801
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -55,7 +55,6 @@ type
     continues_to_lineit: int    # the match continues until this line
 
 
-
   ConCatStyle = enum
     ccaNone               # no extras
     ccaLineEnding         # with \p
@@ -73,6 +72,38 @@ type
     skipEchoFileInsertions
     skipWriteAny
     skipWriteSecond
+
+  # ======================= to be implemented =======================
+
+  BatchComparison = object
+    batch_address_list_namest: string
+    minlengthit: int
+    fuzzypercentit: int
+    boundary_lengthit: int
+    outputsetse: set[OutputElems]
+    tasksetse: set[TaskElems]
+
+
+  BatchFiles = object
+    weblinkst: string
+    textfilenamest: string
+
+
+  Comparison = object
+    afilepathst: string
+    bfilepathst: string
+
+
+  OutputElems = enum
+    outRegistry
+    outCumulativesTwoTimes
+    outMatchesFirstForTest
+
+
+  TaskElems = enum
+    tskAssertMatches
+    tskAssertMarkings
+  # ===================================================================
 
 var 
   afiledata: Table[int, FileLineData]
@@ -1453,6 +1484,50 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
 
 
 
+proc createCombinations(numit: int) = 
+
+  var numbersq: seq[int]
+
+  for it in  1..numit:
+    numbersq.add(it)
+
+  # create pairs
+  var pairsq: seq[array[2, int]]
+  var startit: int = 0
+
+  while startit < numit-1:
+    for it in  startit..<numit:
+      if it > startit:
+        pairsq.add([numbersq[startit], numbersq[it]])
+
+    startit += 1
+
+  echo pairsq
+
+
+
+
+proc compareMultipleFiles() =
+  discard
+
+  # create a batch-comparison
+    # fill in the batch-comp-object
+  # tof expects a file some_batch_comp.lst with web-addresses
+  # create a subdir all_batch_comps
+  # create a subsubdir named: all_batch_comps/some_batch_comp
+  # for all weblinks in the list:
+    # extract text and save as file in subdir
+    # prepend the generated text-file-name before the weblink
+  # create combi-list of the text-files
+  # for each combo in the list:
+    # add a comparison-object to the sequence
+    # for comp in seq:
+      # generate the output-elems
+      # perform the tasks (tests)
+
+
+
+
 proc processCommandLine() = 
 #[
   firstly load the args from the commandline and set the needed vars 
@@ -1587,7 +1662,6 @@ proc processCommandLine() =
 var testbo: bool = false
 
 if not testbo:
-  #saveAndEchoResults()
   processCommandLine()
 
 else:
@@ -1657,10 +1731,8 @@ else:
   #--------------------------------
   #echo getActiveProject()
   #--------------------------------
-  #let jp = joinPath
+  #echo joinPath("/pad","bestand.txt")
+  #echo pfc("aap/","noot")
+  #--------------------------------
 
-  echo joinPath("/pad","bestand.txt")
-  echo pfc("aap/","noot")
-
-
-
+  createCombinations(8)
