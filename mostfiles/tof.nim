@@ -2,17 +2,18 @@
 # Tof version 2 is an update for large files by usage of a line-based algorithm.
 
 
-
-import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os]
+import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os, paths]
 #import std/private/[osdirs, osfiles]
 
 #import unicode
-import jolibs/generic/[g_templates]
+import jolibs/generic/[g_templates, g_mine]
 
 import nimclipboard/libclipboard
 
+import random
 
-var versionfl: float = 2.1801
+
+var versionfl: float = 2.201
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -84,14 +85,19 @@ type
     tasksetse: set[TaskElems]
 
 
-  BatchFiles = object
+  WebToFileMap = object
     weblinkst: string
-    textfilenamest: string
+    textfilepathst: string
 
 
   Comparison = object
     afilepathst: string
     bfilepathst: string
+    minlengthit: int    
+    fuzzypercentit: int
+    boundary_lengthit: int
+    outputsetse: set[OutputElems]
+    tasksetse: set[TaskElems]
 
 
   OutputElems = enum
@@ -108,6 +114,9 @@ type
 var 
   afiledata: Table[int, FileLineData]
   bfiledata: Table[int, FileLineData]
+
+
+randomize()  # Zorgt voor verschillende resultaten bij elke run
 
 
 
@@ -236,6 +245,8 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
   #try:
   # open the file for reading
   echo "Searching line-matches.."
+  echo "File A: " & afilepathst
+  echo "File B: " & bfilepathst
   echo "Searching - phase 1/2"
 
   if open(afileob, afilepathst, fmRead) and open(bfileob, bfilepathst, fmRead):
@@ -304,6 +315,7 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
                 else:
                   lensq[ait][bit] = 0
 
+  echo "linematchsq.len = " & $linematchsq.len
   echo "Searching - phase 2/2"
 
   # Filter: only keep the longest unique, non-overlapping substrings 
@@ -364,8 +376,6 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
 
   #result = filtered
   result = updated
-
-
 
 
 
@@ -1051,7 +1061,7 @@ proc trimPhraseBoundaries(phrasest: string; min_boundary_frag_sizeit: int): stri
 
 
 
-proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 8): string = 
+proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 0): string = 
 
   # concerns the files project_someproject_accumulative-matches.txt
 
@@ -1137,6 +1147,15 @@ template pfc(x: varargs[untyped]): untyped =
   # aliasing above proc
   prefixFilePathConditionally(x)
 
+
+proc updatePath(currentpathst, prefixpathst: string): string = 
+
+  # prefix a directory-path if not present
+
+  if $parentDir(Path(currentpathst)) == prefixpathst:
+    result = currentpathst
+  else:
+    result = prefixpathst / currentpathst
 
 
 
@@ -1405,15 +1424,20 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
         writeFile(filepath_purematchest, pure_matchest)    
         if projectst != "":
 
-          var cumul_tekst: string 
+          var cumul_tekst, fchar1st, fchar2st: string 
           if fileExists(filepath_cumulativest):
-            cumul_tekst = readFile(filepath_cumulativest)
-            cumul_tekst &= "\p=========================================\p" & pure_matchest
+            if not projectst.startswith("_"):
+              cumul_tekst = readFile(filepath_cumulativest)
+
+            fchar1st = safeSlice(cleanFile(text1st), 15)
+            fchar2st = safeSlice(cleanFile(text2st), 15)
+            cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & pure_matchest
+
           else:
             cumul_tekst = pure_matchest
 
           writeFile(filepath_cumulativest, cumul_tekst)
-          writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 14))
+          writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
 
 
     # for the reverse comparison (1 and 2 swapped) also the matching must be rerun
@@ -1506,24 +1530,284 @@ proc createCombinations(numit: int) =
 
 
 
+proc  createCombinationsOfStrings(stringsq: seq[string]): seq[array[2, string]] =
 
-proc compareMultipleFiles() =
-  discard
+  # create all possible pairs of strings in stringsq exclulding reverse orders
+  # meaning: when a,b exist b,a is excluded
 
-  # create a batch-comparison
-    # fill in the batch-comp-object
+
+  var pairsq: seq[array[2, string]]
+  var startit: int = 0
+  var lengthit: int = stringsq.len
+
+  while startit < lengthit-1:
+    for it in  startit..<lengthit:
+      if it > startit:
+        pairsq.add([stringsq[startit], stringsq[it]])
+
+    startit += 1
+
+  result = pairsq
+
+
+
+proc convertWebNameToFilename(webaddresst, extensionst: string; add_randomstringbo: bool): string = 
+  # Convert a webaddress to a shorter local file-name using elems of the weblink
+  # Can be used as an alias for webaddress when used without extension or date
+
+  var 
+    filenamest, tempst, first, last: string
+    webchuncksq, firstdotsq, lastdotsq: seq[string]
+    randst: string
+
+  if webaddresst.len > 7 and ("//" in webaddresst):
+    let numbit = rand(9000) + 1000
+    randst = $numbit
+
+    tempst = webaddresst.split("//")[1]
+    #echo tempst
+
+    if  "/" notin webaddresst:
+
+      firstdotsq = tempst.split(".")
+      first = tempst
+
+      if firstdotsq[0] == "www":
+        filenamest = first[4..^1]
+      else:
+        filenamest = first
+
+    else:   # if  "/" in webaddresst:
+      webchuncksq = tempst.split("/")
+    
+      first = webchuncksq[0]
+      firstdotsq = first.split(".")
+
+
+      last = webchuncksq[webchuncksq.len - 1]
+      if last == "" and webchuncksq.len > 2:
+        last = webchuncksq[webchuncksq.len - 2]
+
+      lastdotsq = last.split(".")
+
+      if firstdotsq[0] == "www":
+        filenamest = first[4..^1]
+      else:
+        filenamest = first
+
+      filenamest &= "_" & lastdotsq[0].safeSlice(20)
+
+    if add_randomstringbo:
+      filenamest &= "_" & randst
+    if extensionst != "":
+      filenamest &= "." & extensionst
+
+    result = filenamest
+
+  else:
+    result = ""
+
+
+
+
+proc baseName(filenamest: string): string = 
+  # return the part in front of the extension
+
+  var 
+    namesq: seq[string]
+    extensionst, basenamest: string
+    tailsizeit: int
+
+  namesq = filenamest.split('.')
+  extensionst = namesq[^1]
+  tailsizeit = extensionst.len + 2
+  basenamest = filenamest[0..^tailsizeit]
+
+  result = basenamest
+
+
+
+proc fileNameFromPath(filepathst: string): string =
+
+  var 
+    namesq: seq[string]
+    tempst: string
+
+  namesq = filepathst.split("/")  
+  tempst = namesq[namesq.len - 1]
+
+  result = tempst
+
+
+
+proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int) =
+
+#outputsetse: set[OutputElems]
+
+
+  # create a batch-comparison-file (.bacomp)
+
+
+  # fill in the batch-comp-object
+  #[]#
+
+  echo "Preparing batch-comparison - aot creating batch-comparison-file (.bacomp) ..."
+  var bob: BatchComparison
+  bob.batch_address_list_namest = batchlistnamest
+  bob.minlengthit = minlengthit
+  bob.fuzzypercentit = fuzzypercentit
+  bob.boundary_lengthit = boundary_lengthit
+  #bob.outputsetse = outputsetse
+  
   # tof expects a file some_batch_comp.lst with web-addresses
-  # create a subdir all_batch_comps
-  # create a subsubdir named: all_batch_comps/some_batch_comp
-  # for all weblinks in the list:
+  # create a subsubdir named: batch_comparisons/some_batch_comp
+
+  var workdirst, basenamest: string
+  var batchdirst: string = "batch_comparisons"
+  basenamest = bob.batch_address_list_namest[0..^5]   # basename becomes the subdir
+  workdirst = batchdirst / basenamest
+  createDir(workdirst)
+  
+
+  # open the batchlist-file
+  var linkfilest: string = updatePath(bob.batch_address_list_namest, batchdirst)
+  var linklist: string = readFile(linkfilest)
+  var dualfilelisq: seq[WebToFileMap]
+  var wfob: WebToFileMap
+  var textfilelisq: seq[string]
+
+  # read the weblinks into a seq of array and append the generated text-file-name
+  for linest in linklist.splitLines():
+    if linest.len > 4:
+      wfob.weblinkst = linest
+      wfob.textfilepathst = workdirst / convertWebNameToFilename(linest, "txt", true)
+      dualfilelisq.add(wfob)
+      textfilelisq.add(wfob.textfilepathst)
+
+
+  var sitest, innertekst: string
+
+  # for all weblinks in the seq:
+  for mapob in dualfilelisq:
     # extract text and save as file in subdir
-    # prepend the generated text-file-name before the weblink
+    sitest = getWebSite(mapob.weblinkst)
+    innertekst = getInnerText2(sitest, -1, 80)
+    writeFile(mapob.textfilepathst, innertekst)
+
+
+  var filepairsq: seq[array[2, string]]
   # create combi-list of the text-files
-  # for each combo in the list:
-    # add a comparison-object to the sequence
-    # for comp in seq:
-      # generate the output-elems
-      # perform the tasks (tests)
+  filepairsq = createCombinationsOfStrings(textfilelisq)
+
+  var datast, sepst: string
+  sepst = "___"
+  withFileAdvanced(fileob, batchdirst / basenamest & ".bacomp", fmAppend):
+
+    # for each combo in the list:
+    for pairar in filepairsq:
+      # append a line of comparison-data to a file some_batch_comp.bacomp
+      datast = pairar[0] & sepst & pairar[1] & sepst & $bob.minlengthit & sepst & $bob.fuzzypercentit & sepst & $bob.boundary_lengthit
+      fileob.writeLine(datast)
+
+
+
+
+proc runBatchComparison(batchcomp_filepathst: string) = 
+
+  # for each comp-data-line from the file run a comparison
+
+  var 
+    partsq: seq[string]
+    cob: Comparison
+    compsq: seq[Comparison]
+    subdirst = "batch_comparisons"
+
+  # read file
+  echo "Running batch-file: " & batchcomp_filepathst
+  withFileAdvanced(fileob, batchcomp_filepathst, fmRead):
+    # for each line in the file:
+    for linest in fileob.lines:
+      if "___" in linest:
+        echo linest
+        partsq = linest.split("___")
+
+        # add a comparison-object to the sequence
+        cob.afilepathst = partsq[0]
+        cob.bfilepathst = partsq[1]
+        cob.minlengthit = parseInt(partsq[2])
+        cob.fuzzypercentit = parseInt(partsq[3])
+        cob.boundary_lengthit = parseInt(partsq[4])
+        #cob.outputsetse = partsq[0]
+        #cob.tasksetse = partsq[0]
+        compsq.add(cob)
+
+
+  var 
+    timestampst: string
+    firstchars01st, firstchars02st: string
+    overlap1st, overlap2st, pure_matchest: string = ""
+
+
+  # for comp in seq:
+  for cmob in compsq:
+
+    # find matches
+    var lmobsq: seq[LineMatch]
+    lmobsq = findLinematches(cmob.afilepathst, cmob.bfilepathst, cmob.minlengthit, cmob.fuzzypercentit)
+    let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, cmob.afilepathst, cmob.bfilepathst, cmob.fuzzypercentit))
+
+    ## open file 1 and 2
+    #var text1st = readFile(cmob.afilepathst)
+    #var text2st = readFile(cmob.bfilepathst)
+    ##fchar1st = safeSlice(cleanFile(text1st), 15)
+    ##fchar2st = safeSlice(cleanFile(text2st), 15)
+
+
+    var filepath_cumulativest, projectst: string = ""
+
+    projectst = baseName(fileNameFromPath(batchcomp_filepathst))
+
+    filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
+    #filepath_cumulativest = pfc(filepath_cumulativest, ppst)
+
+    var filepath_cumul_processed: string
+    filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
+    #filepath_cumul_processed = pfc(filepath_cumul_processed, ppst)
+
+
+    # generate the output-elems
+    if cmob.fuzzypercentit == 100:
+      pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
+      if projectst != "":
+
+        var cumul_tekst, fchar1st, fchar2st: string 
+        fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
+        fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
+
+        if fileExists(filepath_cumulativest):
+          cumul_tekst = readFile(filepath_cumulativest)
+
+          cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
+        else:
+          cumul_tekst = "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" &  uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
+
+        writeFile(filepath_cumulativest, cumul_tekst)
+        writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
+    # perform the tasks (tests); to be implemented
+
+
+
+
+proc prepAndRunBatches(batchfilepathst: string; minlengthit = 15, fuzzypercentit = 100, boundary_lengthit = 20) = 
+
+
+  prepareBatchComparison(batchfilepathst, minlengthit, fuzzypercentit, boundary_lengthit)
+
+  var filepathst: string
+  filepathst = "batch_comparisons" / baseName($extractFilename(batchfilepathst)) & ".bacomp"
+
+  runBatchComparison(filepathst)
+
 
 
 
@@ -1536,14 +1820,13 @@ proc processCommandLine() =
   test: string
 ]#
 
-
   var 
     optob = initOptParser(shortNoVal = {'h'}, longNoVal = @["help"])
     #----------------------------------
     #projectpathst: string = ""
     procst: string = "saveAndEchoResults"
     #----------------------------------
-    lengthit: int = 0
+    lengthit: int = 15
     fuzzypercentit: int = 100
     boundary_lengthit: int = 30
     use_alternate_sourcesbo: bool = false
@@ -1553,6 +1836,7 @@ proc processCommandLine() =
     # table for mapping options to enums
     skipta: Table[string, Skippings]
     internalcompbo: bool = false
+    batchfilepathst: string = ""
 
   skipta["e"] = skipEchoFileInsertions
   skipta["echo_file_insertions"] = skipEchoFileInsertions
@@ -1574,9 +1858,10 @@ proc processCommandLine() =
     for kind, key, val in optob.getopt():
       case kind:
       of cmdArgument:           # without hyphen(s); not used here
-        #projectpathst = key
-        echo "/pYou have probably forgotten a hyphen - before your option..."
-        echo "(no command-key (without hyphen) required)/p"
+        batchfilepathst = key
+        echo "The command-key (=option without hyphen) is used for batch-operations..."
+        procst = "prepAndRunBatches"
+
       of cmdShortOption, cmdLongOption:
         case key:
         of "a", "accuracy":
@@ -1636,6 +1921,8 @@ proc processCommandLine() =
       saveAndEchoResults(lengthit, use_alternate_sourcesbo = use_alternate_sourcesbo, fuzzypercentit = fuzzypercentit, skipse = skipse, boundary_lengthit = boundary_lengthit, projectst = projectst, internalcompbo = internalcompbo)
     of "echoHelpInfo":
       echoHelpInfo()
+    of "prepAndRunBatches":
+      prepAndRunBatches(batchfilepathst, lengthit, fuzzypercentit, boundary_lengthit)
 
 
   except IOError:
@@ -1659,7 +1946,10 @@ proc processCommandLine() =
     echo "\p****End exception****\p"
 
 
+
+
 var testbo: bool = false
+
 
 if not testbo:
   processCommandLine()
@@ -1735,4 +2025,10 @@ else:
   #echo pfc("aap/","noot")
   #--------------------------------
 
-  createCombinations(8)
+  #createCombinations(8)
+  #--------------------------------
+  #var webaddresst: string = "https://www.bbc.com/news/articles/cy0w4592znyo"
+  #echo convertWebNameToFilename(webaddresst, "txt", true)
+
+  #prepareBatchComparison("air-india-171.lst", 15, 100, 20)
+  echo baseName("aap.nootmies")
