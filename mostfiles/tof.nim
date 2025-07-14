@@ -13,10 +13,10 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.23
+var versionfl: float = 2.241
 
 # sporadically updated:
-var last_time_stamp: string = "2025-06-13 22.43"
+var last_time_stamp: string = "2025-07-14"
 
 #wispbo: bool = true
 
@@ -556,7 +556,7 @@ proc newToOldMatch(sobsq: seq[StringMatch]): seq[Match] =
     mobsq: seq[Match]
     mob: Match
   
-  echo "Backporting ..."
+  #echo "Backporting ..."
 
   for sob in sobsq:
     mob.substring = sob.asubst
@@ -1702,11 +1702,13 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
   linkfilest = pfc(linkfilest, ppst)
 
   if fileExists(linkfilest):
+    removeDir(workdirst)
     createDir(workdirst)
   
-
+  echo "batchfilepathst / linklist = " & linkfilest
   # open the batchlist-file
   var linklist: string = readFile(linkfilest)
+
   var dualfilelisq: seq[WebToFileMap]
   var wfob: WebToFileMap
   var textfilelisq: seq[string]
@@ -1722,11 +1724,15 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
 
   var sitest, innertekst: string
 
-  # for all weblinks in the seq:
+
+  # for all weblinks in the seq convert the html to a text-file
   for mapob in dualfilelisq:
     # extract text and save as file in subdir
     sitest = getWebSite(mapob.weblinkst)
+    sitest = convertHtmlLineBreaksToTempCodes(sitest)
     innertekst = getInnerText2(sitest, -1, 80)
+    innertekst = convertTempCodesToTextLineBreaks(innertekst)
+
     writeFile(mapob.textfilepathst, innertekst)
 
 
@@ -1737,14 +1743,20 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
   var datast, sepst: string
   sepst = "___"
 
-  withFileAdvanced(fileob, batchdirst / basenamest & ".bacomp", fmAppend):
+  #define and create the .bacomp-file
+  var mydotbacompst: string = batchdirst / basenamest & ".bacomp"
+
+  #echo "mydotbacompst = " & mydotbacompst
+
+  writeFile(mydotbacompst, "")    # reset a previous to an empty one
+
+  withFileAdvanced(fileob, mydotbacompst, fmAppend):
 
     # for each combo in the list:
     for pairar in filepairsq:
       # append a line of comparison-data to a file some_batch_comp.bacomp
       datast = pairar[0] & sepst & pairar[1] & sepst & $bob.minlengthit & sepst & $bob.fuzzypercentit & sepst & $bob.boundary_lengthit
       fileob.writeLine(datast)
-
 
 
 
@@ -1799,25 +1811,27 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
     timestampst: string
     firstchars01st, firstchars02st: string
     overlap1st, overlap2st, pure_matchest: string = ""
+    compcountit: int = 0
+
+  var filepath_cumulativest, projectst: string
+  var filepath_cumul_processed: string
+  var lmobsq: seq[LineMatch]
+  var cumul_tekst, fchar1st, fchar2st: string 
+
+
+  projectst = baseName($extractFilename(Path(batchcomp_filepathst)))
+
+  filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
+  filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
 
 
   # for comp in seq do the actual comparisons
   for cmob in compsq:
-
+    compcountit += 1
+    echo "Processing comp. " & $compcountit & " of " & $compsq.len
     # find matches
-    var lmobsq: seq[LineMatch]
     lmobsq = findLinematches(cmob.afilepathst, cmob.bfilepathst, cmob.minlengthit, cmob.fuzzypercentit)
     let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, cmob.afilepathst, cmob.bfilepathst, cmob.fuzzypercentit))
-
-
-    var filepath_cumulativest, projectst: string = ""
-
-    projectst = baseName(fileNameFromPath(batchcomp_filepathst))
-
-    filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
-
-    var filepath_cumul_processed: string
-    filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
 
 
     # generate the output-elems
@@ -1825,7 +1839,6 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
       pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
       if projectst != "":
 
-        var cumul_tekst, fchar1st, fchar2st: string 
         fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
         fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
 
@@ -1838,10 +1851,10 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
 
         writeFile(filepath_cumulativest, cumul_tekst)
         writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
-    echo "\p=========================================================================="
-    echo "Results written to: "
-    echo filepath_cumulativest
-    echo filepath_cumul_processed
+  echo "\p=========================================================================="
+  echo "Results written to: "
+  echo filepath_cumulativest
+  echo filepath_cumul_processed
     # perform the tasks (tests); to be implemented
 
 
