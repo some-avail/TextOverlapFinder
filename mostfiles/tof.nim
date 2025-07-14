@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.201
+var versionfl: float = 2.23
 
 # sporadically updated:
 var last_time_stamp: string = "2025-06-13 22.43"
@@ -1136,6 +1136,7 @@ proc getActiveProject(extra_tof_dirst: string = ""): (string, string) =
 
 proc prefixFilePathConditionally(currentpathst, prefixpathst: string): string =
 
+  # prefix a filepath if it is present as parameter
   if prefixpathst != "":
     result = prefixpathst / currentpathst
   else:
@@ -1150,7 +1151,8 @@ template pfc(x: varargs[untyped]): untyped =
 
 proc updatePath(currentpathst, prefixpathst: string): string = 
 
-  # prefix a directory-path if not present
+  #[prefix a directory-path if not present in the current path
+  ]#
 
   if $parentDir(Path(currentpathst)) == prefixpathst:
     result = currentpathst
@@ -1184,7 +1186,7 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
   ppst = projectpathst
 
   if activeprojectst != "":
-    createDir(projectpathst)
+    #createDir(projectpathst)     # why needed?
     echo "\p----------------------"
     echo "Using active (starred) project: " & activeprojectst
     echo "Project-path: " & projectpathst
@@ -1199,16 +1201,21 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
   var validbo: bool = false
   if minLengthit == 0:
     echo "Enter Minimal overlap-length (press Enter for " & $minLen & "): "
+    echo "(enter 0 to exit program Tof)"
     while not validbo:
       let inputst = readLine(stdin)
       if inputst.len != 0: 
         if inputst.all(isDigit):
           minLen = parseInt(inputst)
-          if minlen < 4:
+          if minLen == 0:
+            echo "Exiting..."
+            return
+          elif minlen in 1..4:
             minLen = 4
             echo "Minimal minimal length = 4; using 4 ..."
           validbo = true
       else:
+        #return
         break
   else:
     minLen = minlengthit
@@ -1615,15 +1622,20 @@ proc baseName(filenamest: string): string =
 
   var 
     namesq: seq[string]
-    extensionst, basenamest: string
+    extensionst, basenamest, filetailst: string
     tailsizeit: int
 
-  namesq = filenamest.split('.')
-  extensionst = namesq[^1]
-  tailsizeit = extensionst.len + 2
-  basenamest = filenamest[0..^tailsizeit]
 
-  result = basenamest
+  filetailst = $extractFilename(Path(filenamest))
+  namesq = filetailst.split('.')
+  if namesq.len > 1:
+    extensionst = namesq[^1]
+    tailsizeit = extensionst.len + 2
+    basenamest = filetailst[0..^tailsizeit]
+
+    result = basenamest
+  else:
+    result = filetailst
 
 
 
@@ -1640,14 +1652,15 @@ proc fileNameFromPath(filepathst: string): string =
 
 
 
-proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int) =
+proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int; projectprefixpathst: string = "") =
 
 #outputsetse: set[OutputElems]
 
 
   # create a batch-comparison-file (.bacomp)
 
-
+  # alias
+  var ppst: string = projectprefixpathst
   # fill in the batch-comp-object
   #[]#
 
@@ -1662,15 +1675,37 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
   # tof expects a file some_batch_comp.lst with web-addresses
   # create a subsubdir named: batch_comparisons/some_batch_comp
 
+
   var workdirst, basenamest: string
   var batchdirst: string = "batch_comparisons"
-  basenamest = bob.batch_address_list_namest[0..^5]   # basename becomes the subdir
+
+  # prefix a project-path when available
+  batchdirst = pfc(batchdirst, ppst)
+
+  basenamest = baseName(bob.batch_address_list_namest)   # aot basename will be used as subdir
+
   workdirst = batchdirst / basenamest
-  createDir(workdirst)
+
+  var linkfilest: string
+
+  # avoid overlapping paths (concerning dir batch_comparisons)
+  # scenarios:
+  #- single file / no project
+  #- single file with project
+  #- prefixed file / no project
+  #- prefixed file with project
+
+  # use updatePath to enable dir-omission of dir "batch_comparisons"
+  linkfilest = updatePath(bob.batch_address_list_namest, "batch_comparisons")
+
+  # use pfc to prefix project-path if needed
+  linkfilest = pfc(linkfilest, ppst)
+
+  if fileExists(linkfilest):
+    createDir(workdirst)
   
 
   # open the batchlist-file
-  var linkfilest: string = updatePath(bob.batch_address_list_namest, batchdirst)
   var linklist: string = readFile(linkfilest)
   var dualfilelisq: seq[WebToFileMap]
   var wfob: WebToFileMap
@@ -1701,6 +1736,7 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
 
   var datast, sepst: string
   sepst = "___"
+
   withFileAdvanced(fileob, batchdirst / basenamest & ".bacomp", fmAppend):
 
     # for each combo in the list:
@@ -1712,19 +1748,35 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
 
 
 
-proc runBatchComparison(batchcomp_filepathst: string) = 
+proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: string = "") = 
 
-  # for each comp-data-line from the file run a comparison
+  #[ This proc expects a file batchcomp_filepathst (somebatchcomp.bacomp) from which
+  it reads lines where each line is a comparison-definition.
+  The projectprefixpathst is used to read/write all data in project-dir
+
+  For each comp-data-line from the file, run a comparison
+  ]#
 
   var 
     partsq: seq[string]
     cob: Comparison
     compsq: seq[Comparison]
     subdirst = "batch_comparisons"
+    new_batchcomp_filepathst, ppst: string
+
+  ppst = projectprefixpathst
+
+  subdirst = pfc(subdirst, ppst)
+  new_batchcomp_filepathst = batchcomp_filepathst
+  new_batchcomp_filepathst = pfc(new_batchcomp_filepathst, ppst)
+
 
   # read file
-  echo "Running batch-file: " & batchcomp_filepathst
-  withFileAdvanced(fileob, batchcomp_filepathst, fmRead):
+  echo "Running batch-file: " & new_batchcomp_filepathst
+  echo "\p=================Processable lines: =========================="
+
+  # write the line-data to a comparison-object and add it to a sequence
+  withFileAdvanced(fileob, new_batchcomp_filepathst, fmRead):
     # for each line in the file:
     for linest in fileob.lines:
       if "___" in linest:
@@ -1741,6 +1793,7 @@ proc runBatchComparison(batchcomp_filepathst: string) =
         #cob.tasksetse = partsq[0]
         compsq.add(cob)
 
+  echo "==============================================================\p"
 
   var 
     timestampst: string
@@ -1748,7 +1801,7 @@ proc runBatchComparison(batchcomp_filepathst: string) =
     overlap1st, overlap2st, pure_matchest: string = ""
 
 
-  # for comp in seq:
+  # for comp in seq do the actual comparisons
   for cmob in compsq:
 
     # find matches
@@ -1756,23 +1809,15 @@ proc runBatchComparison(batchcomp_filepathst: string) =
     lmobsq = findLinematches(cmob.afilepathst, cmob.bfilepathst, cmob.minlengthit, cmob.fuzzypercentit)
     let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, cmob.afilepathst, cmob.bfilepathst, cmob.fuzzypercentit))
 
-    ## open file 1 and 2
-    #var text1st = readFile(cmob.afilepathst)
-    #var text2st = readFile(cmob.bfilepathst)
-    ##fchar1st = safeSlice(cleanFile(text1st), 15)
-    ##fchar2st = safeSlice(cleanFile(text2st), 15)
-
 
     var filepath_cumulativest, projectst: string = ""
 
     projectst = baseName(fileNameFromPath(batchcomp_filepathst))
 
     filepath_cumulativest = subdirst & "/project_" & projectst & "_cumulative-matches.txt"
-    #filepath_cumulativest = pfc(filepath_cumulativest, ppst)
 
     var filepath_cumul_processed: string
     filepath_cumul_processed = subdirst & "/project_" & projectst & "_cumulative-matches_processed.txt"
-    #filepath_cumul_processed = pfc(filepath_cumul_processed, ppst)
 
 
     # generate the output-elems
@@ -1793,21 +1838,47 @@ proc runBatchComparison(batchcomp_filepathst: string) =
 
         writeFile(filepath_cumulativest, cumul_tekst)
         writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
+    echo "\p=========================================================================="
+    echo "Results written to: "
+    echo filepath_cumulativest
+    echo filepath_cumul_processed
     # perform the tasks (tests); to be implemented
 
 
 
+proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit = 100, boundary_lengthit = 20) = 
 
-proc prepAndRunBatches(batchfilepathst: string; minlengthit = 15, fuzzypercentit = 100, boundary_lengthit = 20) = 
+#[]#
+  var 
+    activeprojectst, projectpathst, ppst: string = ""
+    newminlengthit: int    # 
 
+  (activeprojectst, projectpathst) = getActiveProject()
+  # shorter alias:
+  ppst = projectpathst
 
-  prepareBatchComparison(batchfilepathst, minlengthit, fuzzypercentit, boundary_lengthit)
+  if activeprojectst != "":
+    #createDir(projectpathst)     # why needed?
+    echo "\p----------------------"
+    echo "Using active (starred) project: " & activeprojectst
+    echo "Project-path: " & projectpathst
+    echo "See the file projects.dat in the executable dir for more info.."
+    echo "----------------------"
+  else:
+    echo "No active project selected (in file projects.dat) - using default directory..."
+
+  if minlengthit == 0:
+    # default when none is entered (which gives 0)
+    newminlengthit = 15
+  else:
+    newminlengthit = minlengthit
+
+  prepareBatchComparison(batchfilepathst, newminlengthit, fuzzypercentit, boundary_lengthit, projectpathst)
 
   var filepathst: string
   filepathst = "batch_comparisons" / baseName($extractFilename(batchfilepathst)) & ".bacomp"
 
-  runBatchComparison(filepathst)
-
+  runBatchComparison(filepathst, projectpathst)
 
 
 
@@ -1826,7 +1897,7 @@ proc processCommandLine() =
     #projectpathst: string = ""
     procst: string = "saveAndEchoResults"
     #----------------------------------
-    lengthit: int = 15
+    lengthit: int = 0
     fuzzypercentit: int = 100
     boundary_lengthit: int = 30
     use_alternate_sourcesbo: bool = false
@@ -1927,7 +1998,7 @@ proc processCommandLine() =
 
   except IOError:
     let errob = getCurrentException()
-    echo "\pCannot open one or more files! 01.txt and 02.txt or alternatives from source_files.dat must be present. \pTechnical details:" 
+    echo "\pCannot open one or more files! \p(01.txt and 02.txt or alternatives from source_files.dat must be present in case of single comparison). \pTechnical details:" 
     echo "-------------------------------------------------------"
     echo errob.name
     echo errob.msg
@@ -1945,6 +2016,9 @@ proc processCommandLine() =
     echo getStackTrace()
     echo "\p****End exception****\p"
 
+
+proc dummy() = 
+  discard
 
 
 
