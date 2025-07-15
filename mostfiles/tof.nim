@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.241
+var versionfl: float = 2.242
 
 # sporadically updated:
 var last_time_stamp: string = "2025-07-14"
@@ -1071,7 +1071,7 @@ proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLine
   # copy non-empty and unique lines to seq
   var trimst: string
   for mst in linesq:
-    if mst.len > 0 and "=====" notin mst:
+    if mst.len > 0 and "=====" notin mst and "#####" notin mst:
       trimst = trimPhraseBoundaries(mst, 3)
       if trimst.len >= min_phrase_lengthit:
         if trimst notin matchsq:
@@ -1817,7 +1817,7 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
   var filepath_cumul_processed: string
   var lmobsq: seq[LineMatch]
   var cumul_tekst, fchar1st, fchar2st: string 
-
+  var previous_afile_pathst: string = ""
 
   projectst = baseName($extractFilename(Path(batchcomp_filepathst)))
 
@@ -1837,20 +1837,20 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
     # generate the output-elems
     if cmob.fuzzypercentit == 100:
       pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
-      if projectst != "":
 
-        fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
-        fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
+      fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
+      fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
 
-        if fileExists(filepath_cumulativest):
-          cumul_tekst = readFile(filepath_cumulativest)
+      if cmob.afilepathst != previous_afile_pathst and previous_afile_pathst != "":
+        cumul_tekst &= "\p######################################### New afile ##########################################\p"
+      cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
 
-          cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
-        else:
-          cumul_tekst = "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" &  uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
+      previous_afile_pathst = cmob.afilepathst
 
-        writeFile(filepath_cumulativest, cumul_tekst)
-        writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
+  writeFile(filepath_cumulativest, cumul_tekst)
+  writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
+
+
   echo "\p=========================================================================="
   echo "Results written to: "
   echo filepath_cumulativest
