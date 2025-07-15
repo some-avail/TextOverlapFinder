@@ -186,13 +186,17 @@ Since Tof 2.2, Tof can do multiple comparisons with one command, called batch-co
 - a list with weblinks, like myweblinks.lst
 
 Then you must run (on linux) either of below commands (both work since tof prepends the subdir if missing):
+
 ./tof batch_comparisons/myweblinks.lst
+
 ./tof myweblinks.lst
 
 On windows you substitute ./tof.exe
 
 The relevant output files are:
+
 project_myweblinks_cumulative-matches.txt
+
 project_myweblinks_cumulative-matches_processed.txt
 
 Look at option -p for more info on these cumulatives.
