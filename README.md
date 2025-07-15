@@ -16,14 +16,14 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 
 ### Latest
 
-Tof 2.0 is a new version of tof that can handle larger files. Tof 2.0 now has a line-based algorithm that avoids much memory-usage.
+Tof > 2.0 is a new version of tof that can handle larger files. Tof 2 now has a line-based algorithm that avoids much memory-usage. Current version is tof 2.241.
 
 
 ### Installation
 
 - install Nim
 - tof has since 2.17 one external dependencies (nimclipboard)
-- compile the with: nim c -d:release tof.nim
+- compile the with: nim c -d:release -d:ssl tof.nim
 - or compile and run in one pass: nim c -r tof.nim
 - run with: ./tof or ./tof.exe
 - futurally compilates may be delivered.
@@ -40,6 +40,33 @@ Tof 2.0 is a new version of tof that can handle larger files. Tof 2.0 now has a 
 - let the program run.
 
 
+### Output
+
+The output contains two parts:
+- the first part shows the match-data between files:
+  - stats:
+    - starting-char of the match in the first text
+    - length of the match
+    - starting-char of the match in the second text
+  - the actual match; a substring (that is like a sentence or paragraph depnding on the minimal length)
+- the second part shows a representation of the first file where all the matching segments are marked as such, like so: 
+
+unique text-frag of file1
+
+----overlap start----
+
+matching fragment
+
+----overlap end -----
+
+following unique frag of file1
+
+etc.
+
+- furthermore from 0.65 onward, results of the comparison are -besides echoing to screen- written to a subdirectory named: previous_comparisons
+
+
+
 ### Projects
 
 Since tof 2.18 you can use projects, as defined in the file projects.dat. By placing a star * right before the project you can make a project active. Append a file-path (separated with 3 underscores) where the tof-data must be stored for the project.
@@ -51,10 +78,14 @@ Removing all stars will reset the data-dir to the executable-dir.
 
 (btw this is different from the option -p:someproject which creates cumulative matches for all comps that use that option.)
 
+
+
 ### Registry of comparisons
 
 A file registry_of_comparisons.txt is updated for every comparison whereby files are written to disk.
 (>= Tof 2.17)
+
+
 
 
 ### Options for additional usage-possibilities
@@ -148,38 +179,27 @@ No space between asterisk and filename is allowed.
 ```
 
 
-### Output
+### Batch-comparisons
 
-The output contains two parts:
-- the first part shows the match-data between files:
-  - stats:
-    - starting-char of the match in the first text
-    - length of the match
-    - starting-char of the match in the second text
-  - the actual match; a substring (that is like a sentence or paragraph depnding on the minimal length)
-- the second part shows a representation of the first file where all the matching segments are marked as such, like so: 
+Since Tof 2.2, Tof can do multiple comparisons with one command, called batch-comps. You only need:
+- a folder named batch_comparisons where you have your executable (besides previous_comparisons)
+- a list with weblinks, like myweblinks.lst
 
-unique text-frag of file1
+Then you must run (on linux) either of below commands (both work since tof prepends the subdir if missing):
+./tof batch_comparisons/myweblinks.lst
+./tof myweblinks.lst
 
-----overlap start----
+On windows you substitute ./tof.exe
 
-matching fragment
+The relevant output files are:
+project_myweblinks_cumulative-matches.txt
+project_myweblinks_cumulative-matches_processed.txt
 
-----overlap end -----
+Look at option -p for more info on these cumulatives.
 
-following unique frag of file1
+When you use an active project (see paragraph "Projects"), you must put your myweblinks.lst in:
+your_project_path/batch_comparisons/myweblinks.lst
 
-etc.
-
-- furthermore from 0.65 onward, results of the comparison are -besides echoing to screen- written to a subdirectory named: previous_comparisons
-
-
-### Done
-
-- write results to files.
-- implement a command-structure with options.
-- added fuzzy compare (beta)
-- added large-files-handling (>= 2.0)
 
 
 ### Future
