@@ -11,7 +11,7 @@ import g_tools
 
 
 const
-  versionfl = 0.45
+  versionfl = 0.46
 
 type
   DocType* = enum
@@ -485,6 +485,32 @@ proc removeLongWords(tekst: string, maxwordlengthit: int): string =
   else:
     result = tekst
 
+
+proc convertHtmlLineBreaksToTempCodes*(input_tekst: string): string = 
+
+  var 
+    worktekst: string = input_tekst
+    breakst: string = "_~*~_"     # special linebreakcode for later restoration
+    doublereplace_htmlcodesq: seq[string] = @["</p>", "</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>"]
+    singlereplace_htmlcodesq: seq[string] = @["<br>"]
+
+  for codest in doublereplace_htmlcodesq:
+    worktekst = worktekst.replace(codest, breakst & breakst & codest)  
+
+  for codest in singlereplace_htmlcodesq:
+    worktekst = worktekst.replace(codest, breakst & codest)  
+
+  result = worktekst
+
+
+proc convertTempCodesToTextLineBreaks*(input_tekst: string): string =
+
+  var 
+    worktekst: string = input_tekst
+    breakst: string = "_~*~_"     # special linebreakcode for later restoration
+
+  worktekst = worktekst.replace(breakst, "\p")  
+  result = worktekst
 
 
 proc getInnerText3*(tekst: string, maxwordlengthit: int = -1,
@@ -1200,7 +1226,8 @@ when isMainModule:
   echo substringsInString("aap noot", @["piet"], true)
 ]#
 
-   
+
+#[
   # TEST: getChildLinks
   var 
     datasq: seq[array[5, string]] = @[]
@@ -1216,7 +1243,7 @@ when isMainModule:
   echo "----------------------------"
   for item in datasq:
     echo item
-
+]#
 
 #[ 
  echo getBaseFromWebAddress2("http://www.x.nl/a/b/c/blah.html", true)
@@ -1270,3 +1297,7 @@ calcWordFrequencies*(input_tekst:string, wordlengthit:int, skiplistsq: seq[strin
 ]#
 
   # echo removeLongWords("kort of iets langer of heeeeeeeeel heel lang", 8)
+
+  var tekst = "<h1>myheader</h1>Things have happened<br>To bad"
+  echo convertHtmlLineBreaksToTempCodes(tekst)
+

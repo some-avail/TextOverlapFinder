@@ -16,7 +16,7 @@ TextOverlapFinder (TOF) enables you to find textual matches between two text-fil
 
 ### Latest
 
-Tof > 2.0 is a new version of tof that can handle larger files. Tof 2 now has a line-based algorithm that avoids much memory-usage. Current version is tof 2.241.
+Tof > 2.0 is a new version of tof that can handle larger files. Tof 2 now has a line-based algorithm that avoids much memory-usage. Current version is tof 2.3.
 
 
 ### Installation
@@ -24,9 +24,8 @@ Tof > 2.0 is a new version of tof that can handle larger files. Tof 2 now has a 
 - install Nim
 - tof has since 2.17 one external dependencies (nimclipboard)
 - compile the with: nim c -d:release -d:ssl tof.nim
-- or compile and run in one pass: nim c -r tof.nim
+- or compile and run in one pass: nim c -r -d:ssl tof.nim
 - run with: ./tof or ./tof.exe
-- futurally compilates may be delivered.
 
 
 ### Basic usage
@@ -183,20 +182,16 @@ No space between asterisk and filename is allowed.
 
 Since Tof 2.2, Tof can do multiple comparisons with one command, called batch-comps. You only need:
 - a folder named batch_comparisons where you have your executable (besides previous_comparisons)
-- a list with weblinks, like myweblinks.lst
+- a list with weblinks, like myweblinks.lst, placed inside the folder batch_comparisons
 
-Then you must run (on linux) either of below commands (both work since tof prepends the subdir if missing):
-
-./tof batch_comparisons/myweblinks.lst
-
+Then you must run (on linux) either of below commands (both work since tof prepends the subdir if missing):  
+./tof batch_comparisons/myweblinks.lst  
 ./tof myweblinks.lst
 
 On windows you substitute ./tof.exe
 
-The relevant output files are:
-
-project_myweblinks_cumulative-matches.txt
-
+The relevant output files are:  
+project_myweblinks_cumulative-matches.txt  
 project_myweblinks_cumulative-matches_processed.txt
 
 Look at option -p for more info on these cumulatives.
@@ -209,5 +204,6 @@ your_project_path/batch_comparisons/myweblinks.lst
 ### Future
 
 Future-plans:
+- support unicode
 - deliver executable for windows
 

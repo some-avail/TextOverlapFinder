@@ -2,7 +2,7 @@
 # Tof version 2 is an update for large files by usage of a line-based algorithm.
 
 
-import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os, paths]
+import std/[strutils, sequtils, algorithm, times, parseopt, math, tables, os, paths, dirs]
 #import std/private/[osdirs, osfiles]
 
 #import unicode
@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.242
+var versionfl: float = 2.3
 
 # sporadically updated:
 var last_time_stamp: string = "2025-07-14"
@@ -1161,6 +1161,14 @@ proc updatePath(currentpathst, prefixpathst: string): string =
 
 
 
+proc makeDirsFromList(directorysq: seq[string]) = 
+
+  # create (single depth) dirs if not existing
+  for dirst in directorysq:
+    if not existsOrCreateDir(Path(dirst)):
+      echo "Created directory: " & dirst
+
+
 proc makeFilesFromList(filepathlisq, contentsq: seq[string]) = 
 
   # make files if not existing
@@ -1241,6 +1249,7 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
 
     source_filenamest: string = "source_files.dat"
     subdirst = "previous_comparisons"
+    batchdirst = "batch_comparisons"
 
 
   filename_orig_1st = pfc(filename_orig_1st, ppst)
@@ -1249,9 +1258,12 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
   filename2st = pfc(filename2st, ppst)
   source_filenamest = pfc(source_filenamest, ppst)
   subdirst = pfc(subdirst, ppst)
+  batchdirst = pfc(batchdirst, ppst)
 
 
   makeFilesFromList(@[filename_orig_1st,filename_orig_2st,source_filenamest], @["","","Instead of the text-files 01.txt and 02.txt, use marked files from the file-list source_files.dat with option -u. Marking is done by prefixing an asterisk before the two files you want to compare. List the files below."])
+
+  makeDirsFromList(@[subdirst, batchdirst])
 
 
   if internalcompbo:
@@ -1436,8 +1448,8 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
             if not projectst.startswith("_"):
               cumul_tekst = readFile(filepath_cumulativest)
 
-            fchar1st = safeSlice(cleanFile(text1st), 15)
-            fchar2st = safeSlice(cleanFile(text2st), 15)
+            fchar1st = safeSlice(cleanFile(text1st), 30)
+            fchar2st = safeSlice(cleanFile(text2st), 30)
             cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & pure_matchest
 
           else:
@@ -1842,7 +1854,7 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
       fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
 
       if cmob.afilepathst != previous_afile_pathst and previous_afile_pathst != "":
-        cumul_tekst &= "\p######################################### New afile ##########################################\p"
+        cumul_tekst &= "\p######################################### New A-file ##########################################\p"
       cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
 
       previous_afile_pathst = cmob.afilepathst
