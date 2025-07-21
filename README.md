@@ -2,14 +2,22 @@
 
 ### Intro
 
-TextOverlapFinder (TOF) enables you to find textual matches between two text-files. As opposed to the Linux diff command, which finds differences between texts, tof finds matches between texts. 
+TextOverlapFinder (TOF) enables you to find textual matches between two text-files. As opposed to the Linux diff command, which finds differences between texts, tof finds (partial) matches between texts. 
 
 
 ### Use-cases
 
+Scientific case-based scenario:
+- in scientific studies with Tof you can quickly assess related texts to extend your collection of research-texts on your research-case.
+- what's in an article? Have one file as a reference-file with all the info on the case sofar and a new-file to compare it with. Run Tof to find out:
+  * which matching info is in the new-file, thus profiling it.
+  * find new info in the new-file by looking <u>between</u> the matches. That's where you can find the new not yet processed information.
+
+Journalistic source-reconstruction:
 - my primary use-case was to compare two journalistic stories on the same subject to see which parts overlap (are identical) and which are unique to each story.
-- larger overlaps usually point to a common source which both stories have used.
-- in scientific studies generally you can quickly assess related texts to extend your collection of research-texts.
+- larger overlaps usually point to a common source which both stories have used, thus highlighting source-usage-relations.
+
+Other uses:
 - you can use the program to check for plagiarism.
 - from 0.68 onward you can use fuzzy compare. By that you can determine equal forms and subjects (aot equal / common sources). However the fuzzy comparison is still experimental concerning its beta-quality.
 

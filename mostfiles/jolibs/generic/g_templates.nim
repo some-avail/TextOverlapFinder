@@ -7,25 +7,6 @@ var wispbo* = true
 
 
 
-template wisp_old*(wordsq: varargs[string, `$`]) =
-  # works only for non-release-compilation; thats ok
-  var
-    filepathst, filenamest, modulest, procnamest: string
-    pathsq: seq[string]
-
-  if wispbo:
-    let tob = getStackTraceEntries()      # a proc from the system-module
-
-    if tob.len > 0:       # needed for release-compilation
-      filepathst = $tob[tob.len - 1].filename
-      pathsq = filepathst.split("/")
-      filenamest = pathsq[pathsq.len - 1]
-      modulest = filenamest[0..filenamest.len - 5]
-      procnamest = $tob[tob.len - 1].procname
-      echo "==>  ", modulest, "_", procnamest, "  echos: ",  wordsq
-
-
-
 template getTrace*(wordsq: varargs[string, `$`]) =
   # works only for non-release-compilation; thats ok
   var
