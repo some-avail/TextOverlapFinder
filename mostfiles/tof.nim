@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.3
+var versionfl: float = 2.35
 
 # sporadically updated:
 var last_time_stamp: string = "2025-07-14"
@@ -1106,6 +1106,69 @@ proc splitString(fromclipst: string): (string, string) =
 
 
 
+
+proc chopString(inputtekst: string; words_per_chunkit: int): seq[string] = 
+
+  # chop the input-text in chunks of about words_per_chunkit words.
+  
+
+  var 
+    linewordcountit: int = 0
+    chunkst: string = ""
+    partsq, adjustedlinesq, hanlinesq: seq[string]
+
+
+  # rework the lines to maximize linewordcount
+  for linest in inputtekst.splitLines:
+    linewordcountit = linest.split(' ').len
+    #echo "linest.split(' ') = " & $linest.split(' ')
+    if linewordcountit <= words_per_chunkit:
+      adjustedlinesq.add(linest)
+    else:   # linewordcountit > words_per_chunkit
+  
+      hanlinesq = linest.split(' ')
+      #echo "hanlinesq = " & $hanlinesq
+      while hanlinesq.len > words_per_chunkit:
+        adjustedlinesq.add(hanlinesq[0..words_per_chunkit - 1].join(" "))
+        hanlinesq = hanlinesq[words_per_chunkit..^1]
+
+      if hanlinesq.len > 0:
+        adjustedlinesq.add(hanlinesq.join(" "))
+
+
+  # fill chunks with lines until they are full and then add them to partsq
+  for linest in adjustedlinesq:
+    if chunkst.len + linest.len <= words_per_chunkit:
+      chunkst &= linest & "\p"
+    else:   # chunkst.len + linest.len > words_per_chunkit
+      partsq.add(chunkst)
+      chunkst = linest
+
+  partsq.add(chunkst)
+
+  result = partsq
+
+
+proc chopString2(inputtekst: string; chars_per_chunkit: int): seq[string] = 
+
+  # chop the input-text in chunks of about chars_per_chunkit words.
+
+  var 
+    newtekst = inputtekst
+    partsq: seq[string]
+
+
+  while newtekst.len > chars_per_chunkit:
+    partsq.add(newtekst[0..chars_per_chunkit - 1])
+    newtekst = newtekst[chars_per_chunkit..^1]
+
+  if newtekst.len > 0:
+    partsq.add(newtekst)
+
+  result = partsq
+
+
+
 proc getActiveProject(extra_tof_dirst: string = ""): (string, string) = 
 
   # from the file projects.dat return tuple like (active-project, project-path)
@@ -1169,6 +1232,7 @@ proc makeDirsFromList(directorysq: seq[string]) =
       echo "Created directory: " & dirst
 
 
+
 proc makeFilesFromList(filepathlisq, contentsq: seq[string]) = 
 
   # make files if not existing
@@ -1179,6 +1243,11 @@ proc makeFilesFromList(filepathlisq, contentsq: seq[string]) =
       writeFile(filepathst, contentsq[countit])
       echo "Created file: " & filepathst
     countit += 1
+
+
+
+proc reportMetrics() = 
+  discard
 
 
 
@@ -1279,6 +1348,7 @@ proc saveAndEchoResults(minlengthit: int = 0; use_alternate_sourcesbo: bool = fa
     writeFile(filename_orig_1st, first_internalst)
     writeFile(filename_orig_2st, sec_internalst)
 
+    fromclipst = ""   # clear for memory-reclamation
 
 
   if use_alternate_sourcesbo:
@@ -1553,7 +1623,7 @@ proc  createCombinationsOfStrings(stringsq: seq[string]): seq[array[2, string]] 
 
   # create all possible pairs of strings in stringsq exclulding reverse orders
   # meaning: when a,b exist b,a is excluded
-
+  # example: a,b,c,d > ab, ac, ad, bc, bd, cd
 
   var pairsq: seq[array[2, string]]
   var startit: int = 0
@@ -1567,6 +1637,57 @@ proc  createCombinationsOfStrings(stringsq: seq[string]): seq[array[2, string]] 
     startit += 1
 
   result = pairsq
+
+
+
+
+proc valueInSequence(somesq: seq[array[3, string]]; valuest: string; zcolumnit: int): bool = 
+
+  # check if valuest occurs somewhere in zerobased zcolumnit 
+  var foundbo = false
+
+  for thisar in somesq:
+    if thisar[zcolumnit] == valuest:
+      foundbo = true
+
+  result = foundbo
+
+
+
+proc  createCombinationsOfStrings2(stringsq: seq[string]; alt_orderbo: bool = false): seq[array[2, string]] =
+
+  # create all possible pairs of strings in stringsq exclulding reverse orders
+  # meaning: when a,b exist b,a is excluded
+  # example: a,b,c,d > ab, ac, ad, bc, bd, cd
+  # alt_orderbo means: a,b,c,d > ab, bc, cd, ac, ad, bd
+
+
+  var pairsq: seq[array[3, string]]
+  var realpairsq: seq[array[2, string]]
+  var startit: int = 0
+  var lengthit: int = stringsq.len
+
+  if alt_orderbo:
+    # firstly create the "chained" orders like ab, bc, cd
+    for it in  startit..<lengthit - 1:
+      pairsq.add([stringsq[it], stringsq[it + 1], stringsq[it] & stringsq[it + 1]])
+
+  while startit < lengthit-1:
+    for it in  startit..<lengthit:
+      if it > startit:
+        if not alt_orderbo:
+          pairsq.add([stringsq[startit], stringsq[it], stringsq[startit] & stringsq[it]])
+        else:
+          # only add if not allready added
+          if not valueInSequence(pairsq, stringsq[startit] & stringsq[it], 2):
+            pairsq.add([stringsq[startit], stringsq[it], stringsq[startit] & stringsq[it]])
+
+    startit += 1
+
+  # map seq from 3 to 2
+  realpairsq = pairsq.mapIt([it[0], it[1]])
+
+  result = realpairsq
 
 
 
@@ -1664,7 +1785,7 @@ proc fileNameFromPath(filepathst: string): string =
 
 
 
-proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int; projectprefixpathst: string = "") =
+proc prepareBatchComparison_old(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int; projectprefixpathst: string = "") =
 
 #outputsetse: set[OutputElems]
 
@@ -1751,6 +1872,154 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
   var filepairsq: seq[array[2, string]]
   # create combi-list of the text-files
   filepairsq = createCombinationsOfStrings(textfilelisq)
+
+  var datast, sepst: string
+  sepst = "___"
+
+  #define and create the .bacomp-file
+  var mydotbacompst: string = batchdirst / basenamest & ".bacomp"
+
+  #echo "mydotbacompst = " & mydotbacompst
+
+  writeFile(mydotbacompst, "")    # reset a previous to an empty one
+
+  withFileAdvanced(fileob, mydotbacompst, fmAppend):
+
+    # for each combo in the list:
+    for pairar in filepairsq:
+      # append a line of comparison-data to a file some_batch_comp.bacomp
+      datast = pairar[0] & sepst & pairar[1] & sepst & $bob.minlengthit & sepst & $bob.fuzzypercentit & sepst & $bob.boundary_lengthit
+      fileob.writeLine(datast)
+
+
+
+proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit, boundary_lengthit: int; projectprefixpathst: string = ""; intwordcountit: int = 75) =
+
+#outputsetse: set[OutputElems]
+
+
+  #[Proc to prepare materials to perform a batch-comparison:
+    > Start with either:
+    - a list of weblinks (batchlistnamest like: myweblinks.lst), or
+    - a text on clipboard to be chopped in parts and compared mutually 
+    (batchlistnamest = internal_parts)
+    > Create a batch-comparison-file (.bacomp) to define the batch-comparison:
+    > Create the text-files that are to be compared.
+  ]#
+
+  # alias
+  var ppst: string = projectprefixpathst
+  # fill in the batch-comp-object
+  #[]#
+
+  echo "Preparing batch-comparison - aot creating batch-comparison-file (.bacomp) ..."
+  var bob: BatchComparison
+  bob.batch_address_list_namest = batchlistnamest
+  bob.minlengthit = minlengthit
+  bob.fuzzypercentit = fuzzypercentit
+  bob.boundary_lengthit = boundary_lengthit
+  #bob.outputsetse = outputsetse
+  
+  # tof expects a file some_batch_comp.lst with web-addresses
+  # create a subsubdir named: batch_comparisons/some_batch_comp
+
+
+  var workdirst, basenamest: string
+  var batchdirst: string = "batch_comparisons"
+
+  # prefix a project-path when available
+  batchdirst = pfc(batchdirst, ppst)
+
+  basenamest = baseName(bob.batch_address_list_namest)   # aot basename will be used as subdir
+
+  workdirst = batchdirst / basenamest
+
+  var linkfilest: string
+
+  # avoid overlapping paths (concerning dir batch_comparisons)
+  # scenarios:
+  #- single file / no project
+  #- single file with project
+  #- prefixed file / no project
+  #- prefixed file with project
+
+  # use updatePath to enable dir-omission of dir "batch_comparisons"
+  linkfilest = updatePath(bob.batch_address_list_namest, "batch_comparisons")
+
+  # use pfc to prefix project-path if needed
+  linkfilest = pfc(linkfilest, ppst)
+
+  if fileExists(linkfilest) or batchlistnamest == "internal_parts":
+    removeDir(workdirst)
+    createDir(workdirst)
+
+  
+  var textfilelisq: seq[string]     # list of generated text-files
+
+  if batchlistnamest != "internal_parts":
+
+    echo "batchfilepathst / linklist = " & linkfilest
+    # open the batchlist-file
+    var linklist: string = readFile(linkfilest)
+
+    var dualfilelisq: seq[WebToFileMap]
+    var wfob: WebToFileMap
+
+    # read the weblinks into a seq of array and append the generated text-file-name
+    for linest in linklist.splitLines():
+      if linest.len > 4:
+        wfob.weblinkst = linest
+        wfob.textfilepathst = workdirst / convertWebNameToFilename(linest, "txt", true)
+        dualfilelisq.add(wfob)
+        textfilelisq.add(wfob.textfilepathst)
+
+
+    var sitest, innertekst: string
+
+
+    # for all weblinks in the seq convert the html to a text-file
+    for mapob in dualfilelisq:
+      # extract text and save as file in subdir
+      sitest = getWebSite(mapob.weblinkst)
+      sitest = convertHtmlLineBreaksToTempCodes(sitest)
+      innertekst = getInnerText2(sitest, -1, 80)
+      innertekst = convertTempCodesToTextLineBreaks(innertekst)
+
+      writeFile(mapob.textfilepathst, innertekst)
+
+
+  else:   # internal_parts
+    var 
+     fromclipst, filepathst: string
+     clipob = clipboard_new(nil)
+     textsq: seq[string]
+     countit: int = 0
+  
+
+    fromclipst = $clipob.clipboard_text()
+
+    #(first_internalst, sec_internalst) = splitString(fromclipst)
+    #writeFile(filename_orig_1st, first_internalst)
+    #writeFile(filename_orig_2st, sec_internalst)
+
+    # chop fromclipst in N parts
+    textsq = chopString2(fromclipst, intwordcountit)
+    echo "Running advanced internal comparison from clipboard based on text-partitioning..."
+    echo "Using text-chunk-size (nr. of characters) = " & $intwordcountit
+    echo "Number of text-chunks = " & $textsq.len
+
+    # write text-frags to chunk-files and corresponding textfilelisq 
+    for tekst in textsq:
+      if tekst.len > 0:
+        countit += 1
+        filepathst = workdirst / "chunk_" & $countit & ".txt"
+        textfilelisq.add(filepathst)
+        writeFile(filepathst, tekst)
+
+
+  var filepairsq: seq[array[2, string]]
+  # create combi-list of the text-files
+  filepairsq = createCombinationsOfStrings2(textfilelisq, true)
 
   var datast, sepst: string
   sepst = "___"
@@ -1871,7 +2140,7 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
 
 
 
-proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit = 100, boundary_lengthit = 20) = 
+proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit = 100, boundary_lengthit = 20; intwordcountit: int = 75) = 
 
 #[]#
   var 
@@ -1898,7 +2167,7 @@ proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit 
   else:
     newminlengthit = minlengthit
 
-  prepareBatchComparison(batchfilepathst, newminlengthit, fuzzypercentit, boundary_lengthit, projectpathst)
+  prepareBatchComparison(batchfilepathst, newminlengthit, fuzzypercentit, boundary_lengthit, projectpathst, intwordcountit)
 
   var filepathst: string
   filepathst = "batch_comparisons" / baseName($extractFilename(batchfilepathst)) & ".bacomp"
@@ -1933,6 +2202,7 @@ proc processCommandLine() =
     skipta: Table[string, Skippings]
     internalcompbo: bool = false
     batchfilepathst: string = ""
+    intwordcountit: int = 0
 
   skipta["e"] = skipEchoFileInsertions
   skipta["echo_file_insertions"] = skipEchoFileInsertions
@@ -1978,7 +2248,14 @@ proc processCommandLine() =
 
           internalcompbo = true
           if val != "":
-            echo "Value is not needed for internal comparison.."
+            if val.all(isDigit):
+              intwordcountit = parseInt(val)
+              batchfilepathst = "internal_parts"
+              procst = "prepAndRunBatches"
+            else:
+              echo "Could not parse wordcount (text-parts) for internal comparison.."
+          else:
+            echo "Performing basic (two-part) internal comparison.."
 
 
         of "l", "length-minimum":
@@ -2018,7 +2295,7 @@ proc processCommandLine() =
     of "echoHelpInfo":
       echoHelpInfo()
     of "prepAndRunBatches":
-      prepAndRunBatches(batchfilepathst, lengthit, fuzzypercentit, boundary_lengthit)
+      prepAndRunBatches(batchfilepathst, lengthit, fuzzypercentit, boundary_lengthit, intwordcountit = intwordcountit)
 
 
   except IOError:
@@ -2027,6 +2304,9 @@ proc processCommandLine() =
     echo "-------------------------------------------------------"
     echo errob.name
     echo errob.msg
+    echo "-------------------------------------------------------"
+    echo repr(errob)
+    echo getStackTrace()
     echo "-------------------------------------------------------"
     echo "\pExiting program gracefully...\p"
 
@@ -2130,4 +2410,13 @@ else:
   #echo convertWebNameToFilename(webaddresst, "txt", true)
 
   #prepareBatchComparison("air-india-171.lst", 15, 100, 20)
-  echo baseName("aap.nootmies")
+  #echo baseName("aap.nootmies")
+  # ------------------------------------------
+  var st = "aap noot mies\pwim zus jet volgie"
+  echo "---------------------------------"
+  echo chopString2(st, 4)
+
+
+
+
+
