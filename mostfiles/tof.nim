@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.35
+var versionfl: float = 2.362
 
 # sporadically updated:
 var last_time_stamp: string = "2025-07-14"
@@ -315,6 +315,9 @@ proc findLinematches(afilepathst, bfilepathst: string; minlengthit: int; fuzzype
                 else:
                   lensq[ait][bit] = 0
 
+    afileob.close()
+    bfileob.close()
+
   echo "linematchsq.len = " & $linematchsq.len
   echo "Searching - phase 2/2"
 
@@ -426,8 +429,20 @@ proc convertToStringMatches(linematchsq: var seq[LineMatch]; afilepathst, bfilep
       bfiledatatb[blinecountit] = FileLineData(lineindexit: previousindexit, linelenghtit: blinest.len)
       previousindexit += blinest.len + "\p".len
 
-    afilest = readFile(afilepathst)
-    bfilest = readFile(bfilepathst)
+    afileob.close()
+    bfileob.close()
+
+  #[ in case of the internal-parts-scenario when multiple calls are made a "cannot open" error arises for large files / many chunks.
+  possib. causes:
+  x- file-locking ? try sleep(msecs) to give time to unlock
+  x- file-linked properties (special signs like quotes or so)
+  x- maybe max. file-handles or another threshold reached
+  v- files not closed at diverse locations (afileob and bfileob)
+  ]#
+
+
+  #afilest = readFile(afilepathst)      # is not being used !!!
+  bfilest = readFile(bfilepathst)
 
 
 
@@ -1147,6 +1162,39 @@ proc chopString(inputtekst: string; words_per_chunkit: int): seq[string] =
   partsq.add(chunkst)
 
   result = partsq
+
+
+
+
+proc chopLargeLines(inputtekst: string; words_per_chunkit: int): string = 
+
+  # leave short and chop too long (> words_per_chunkit) lines in pieces
+  # chop long lines in chunks of about words_per_chunkit words.
+  
+  var 
+    linewordcountit: int = 0
+    adjustedlinesq, hanlinesq: seq[string]
+
+
+  for linest in inputtekst.splitLines:
+    linewordcountit = linest.split(' ').len
+    #echo "linest.split(' ') = " & $linest.split(' ')
+    if linewordcountit <= words_per_chunkit:
+      adjustedlinesq.add(linest)
+    else:   # linewordcountit > words_per_chunkit
+  
+      hanlinesq = linest.split(' ')
+      #echo "hanlinesq = " & $hanlinesq
+      while hanlinesq.len > words_per_chunkit:
+        adjustedlinesq.add(hanlinesq[0..words_per_chunkit - 1].join(" "))
+        hanlinesq = hanlinesq[words_per_chunkit..^1]
+
+      if hanlinesq.len > 0:
+        adjustedlinesq.add(hanlinesq.join(" "))
+
+  result = adjustedlinesq.join("\p")
+
+
 
 
 proc chopString2(inputtekst: string; chars_per_chunkit: int): seq[string] = 
@@ -1984,6 +2032,7 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
       sitest = convertHtmlLineBreaksToTempCodes(sitest)
       innertekst = getInnerText2(sitest, -1, 80)
       innertekst = convertTempCodesToTextLineBreaks(innertekst)
+      innertekst = chopLargeLines(innertekst, 100)
 
       writeFile(mapob.textfilepathst, innertekst)
 
@@ -1995,17 +2044,13 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
      textsq: seq[string]
      countit: int = 0
   
-
     fromclipst = $clipob.clipboard_text()
 
-    #(first_internalst, sec_internalst) = splitString(fromclipst)
-    #writeFile(filename_orig_1st, first_internalst)
-    #writeFile(filename_orig_2st, sec_internalst)
+    echo "Running advanced internal comparison from clipboard based on text-partitioning..."
+    echo "Using text-chunk-size (nr. of characters) = " & $intwordcountit
 
     # chop fromclipst in N parts
     textsq = chopString2(fromclipst, intwordcountit)
-    echo "Running advanced internal comparison from clipboard based on text-partitioning..."
-    echo "Using text-chunk-size (nr. of characters) = " & $intwordcountit
     echo "Number of text-chunks = " & $textsq.len
 
     # write text-frags to chunk-files and corresponding textfilelisq 
@@ -2019,7 +2064,7 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
 
   var filepairsq: seq[array[2, string]]
   # create combi-list of the text-files
-  filepairsq = createCombinationsOfStrings2(textfilelisq, true)
+  filepairsq = createCombinationsOfStrings2(textfilelisq, batchlistnamest == "internal_parts")
 
   var datast, sepst: string
   sepst = "___"
@@ -2030,7 +2075,6 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
   #echo "mydotbacompst = " & mydotbacompst
 
   writeFile(mydotbacompst, "")    # reset a previous to an empty one
-
   withFileAdvanced(fileob, mydotbacompst, fmAppend):
 
     # for each combo in the list:
@@ -2112,21 +2156,21 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
     echo "Processing comp. " & $compcountit & " of " & $compsq.len
     # find matches
     lmobsq = findLinematches(cmob.afilepathst, cmob.bfilepathst, cmob.minlengthit, cmob.fuzzypercentit)
+    #sleep(25)
     let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, cmob.afilepathst, cmob.bfilepathst, cmob.fuzzypercentit))
 
 
     # generate the output-elems
-    if cmob.fuzzypercentit == 100:
-      pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
+    pure_matchest = reportPureMatches(matchobsq, ccaLineEnding)
 
-      fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
-      fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
+    fchar1st = safeSlice($extractFilename(Path(cmob.afilepathst)), 45)
+    fchar2st = safeSlice($extractFilename(Path(cmob.bfilepathst)), 45)
 
-      if cmob.afilepathst != previous_afile_pathst and previous_afile_pathst != "":
-        cumul_tekst &= "\p######################################### New A-file ##########################################\p"
-      cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
+    if cmob.afilepathst != previous_afile_pathst and previous_afile_pathst != "":
+      cumul_tekst &= "\p######################################### New A-file ##########################################\p"
+    cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
 
-      previous_afile_pathst = cmob.afilepathst
+    previous_afile_pathst = cmob.afilepathst
 
   writeFile(filepath_cumulativest, cumul_tekst)
   writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
@@ -2308,7 +2352,7 @@ proc processCommandLine() =
     echo repr(errob)
     echo getStackTrace()
     echo "-------------------------------------------------------"
-    echo "\pExiting program gracefully...\p"
+    echo "\pExiting program after error...\p"
 
 
   #unanticipated errors come here

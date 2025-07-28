@@ -1,0 +1,28 @@
+What's new in TextOverlapFinder
+
+2.35
+-added advanced form of internal comparison
+(multi-chunk approach provides more accurate results)
+
+2.23
+-added batch comparisons
+-fixed small bugs
+-improved estethics
+
+2.18
+-added use of project-directories thru projects.dat
+
+2.173
+-added internal comparison from clipboard
+
+2.17
+-added a registry of comparisons
+
+2.16
+-generate cumulative matches with option -p:someproject
+-skip items with option -s (with value e, a or s)
+
+2.11
+-use alternate source-files
+
+

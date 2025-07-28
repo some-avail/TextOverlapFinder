@@ -24,7 +24,7 @@ Other uses:
 
 ### Latest
 
-Tof > 2.0 is a new version of tof that can handle larger files. Tof 2 now has a line-based algorithm that avoids much memory-usage. Current version is tof 2.3.
+2.35 adds advanced internal comparison (see option -i). Current version is 2.36.
 
 
 ### Installation
@@ -119,12 +119,25 @@ matches larger than 20 are given large mark-ups.
 
 -----------------------------------------------------------------
 -i or --internal_comp
+also: -i:char-num
 
 Giving this option leads to an internal comparison, that is a comp. 
 of a text with itself. It means that text of the clipboard 
 is split in two halfs, these halfs are pasted in 01.txt and 02.txt, 
 after which the comparison is run.
 Thus a outline of the text arises. (from tof 2.173 onward)
+
+An *advanced internal comparison* is added since 2.35. While the normal 
+internal comp splits the file in half (two parts), the advanced form 
+splits the file in multiple chunks depending on the provided 
+character-number.
+-i:1000 chops the file in chuncks of thousand bytes and compares these as
+if they were seperate files. This provides more accuracy because 
+all parts of the file are compared internally.
+The handling of parts is done thru the same mechanism as 
+batch-comparisons, and the results can be found there aswell.
+Only the sorting is done in a chained fashion thus following the 
+order of the file.
 
 -----------------------------------------------------------------
 -l or --length-minimum; example -l:20
