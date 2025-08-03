@@ -13,7 +13,7 @@ import nimclipboard/libclipboard
 import random
 
 
-var versionfl: float = 2.362
+var versionfl: float = 2.363
 
 # sporadically updated:
 var last_time_stamp: string = "2025-07-14"
@@ -1078,11 +1078,18 @@ proc trimPhraseBoundaries(phrasest: string; min_boundary_frag_sizeit: int): stri
 
 proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLineEnding; min_phrase_lengthit: int = 0): string = 
 
-  # concerns the files project_someproject_accumulative-matches.txt
+  #[- param tekst is a list of phrases
+    - proc converts string to seq
+    - clean the list by trimming, removing duplicates
+    - resort
+    - convert back to string
+    * made for the files project_someproject_accumulative-matches.txt
+  ]#
 
   # copy tekst to sequence
   var linesq, matchsq: seq[string]
   linesq = tekst.splitLines()
+
   # copy non-empty and unique lines to seq
   var trimst: string
   for mst in linesq:
@@ -1091,14 +1098,17 @@ proc uniquizeAndSortCumulativeList(tekst: string; styleeu: ConCatStyle = ccaLine
       if trimst.len >= min_phrase_lengthit:
         if trimst notin matchsq:
           matchsq.add(trimst)
+
   # sort elements
   matchsq.sort()
+
   # recreate a tekst
   var matcheslist: string
   for mst in matchsq:
     matcheslist = ccat(matcheslist, mst, styleeu)
 
   result = matcheslist
+
 
 
 
@@ -2085,7 +2095,51 @@ proc prepareBatchComparison(batchlistnamest: string; minlengthit, fuzzypercentit
 
 
 
-proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: string = "") = 
+
+proc removeSkipneedyItems(inputtekst: string; skiplisq: seq[string]): string =
+
+  #[  - inputtekst is a list of phrases
+      - remove phrases for which all or some words are in the skiplist
+  ]#
+
+
+  # copy tekst to sequence
+  var 
+    linesq, filteredsq, phrasesq: seq[string]
+    wordcountit, skipcountit: int
+
+  if skiplisq != @[]:
+    linesq = inputtekst.splitLines()
+
+    # remove skipneedy items
+    for phrast in linesq:
+      if phrast.len > 0 and "=====" notin phrast and "#####" notin phrast:
+        skipcountit = 0
+        phrasesq = phrast.split(" ")
+        wordcountit = phrasesq.len
+
+        for wordst in phrasesq:
+          if wordst in skiplisq:
+            skipcountit += 1
+
+        if skipcountit != wordcountit:
+          filteredsq.add(phrast)
+
+    echo "From all lines: " & $linesq.len & " noise-filtered: " & $filteredsq.len
+
+    # recreate a tekst
+    var matcheslist: string = filteredsq.join("\p")
+
+    result = matcheslist
+
+  else:
+    result = inputtekst
+
+
+
+
+
+proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: string = ""; skiplisq: seq[string] = @[]) = 
 
   #[ This proc expects a file batchcomp_filepathst (somebatchcomp.bacomp) from which
   it reads lines where each line is a comparison-definition.
@@ -2156,7 +2210,6 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
     echo "Processing comp. " & $compcountit & " of " & $compsq.len
     # find matches
     lmobsq = findLinematches(cmob.afilepathst, cmob.bfilepathst, cmob.minlengthit, cmob.fuzzypercentit)
-    #sleep(25)
     let matchobsq = newToOldMatch(convertToStringMatches(lmobsq, cmob.afilepathst, cmob.bfilepathst, cmob.fuzzypercentit))
 
 
@@ -2168,13 +2221,17 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
 
     if cmob.afilepathst != previous_afile_pathst and previous_afile_pathst != "":
       cumul_tekst &= "\p######################################### New A-file ##########################################\p"
-    cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
+
+    if skiplisq != @[]:
+      cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & removeSkipneedyItems(uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5), skiplisq)
+    else:
+      cumul_tekst &= "\p==========" & fchar1st & " <> " & fchar2st & "===========\p" & uniquizeAndSortCumulativeList(pure_matchest, ccaLineEnding, 5)
 
     previous_afile_pathst = cmob.afilepathst
 
+
   writeFile(filepath_cumulativest, cumul_tekst)
   writeFile(filepath_cumul_processed, uniquizeAndSortCumulativeList(cumul_tekst, ccaLineEnding, 5))
-
 
   echo "\p=========================================================================="
   echo "Results written to: "
@@ -2184,9 +2241,32 @@ proc runBatchComparison(batchcomp_filepathst: string; projectprefixpathst: strin
 
 
 
-proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit = 100, boundary_lengthit = 20; intwordcountit: int = 75) = 
 
-#[]#
+proc createSkipList(noisefilepartst: string): seq[string] =
+  var 
+    filenamest, filecontentst: string
+    skiplisq: seq[string]
+
+  filenamest = "noise_words_" & noisefilepartst & ".dat"
+  echo filenamest
+  if fileExists(filenamest):
+    filecontentst = readFile(filenamest)
+    skiplisq = filecontentst.splitLines
+    result = skiplisq
+    echo "Using noise-words-file: " & filenamest & " with number of lines: " & $skiplisq.len
+  else:
+    if noisefilepartst != "":
+      echo "Could not find noise-words-file: " & filenamest
+      echo "Continuing without removing noise-words..."
+    result = @[]
+
+
+
+proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit = 100, boundary_lengthit = 20; intwordcountit: int = 75; noisefilepartst: string) = 
+
+#[Prepare and run batch-ops
+  Called from processcommandline]#
+
   var 
     activeprojectst, projectpathst, ppst: string = ""
     newminlengthit: int    # 
@@ -2196,7 +2276,6 @@ proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit 
   ppst = projectpathst
 
   if activeprojectst != "":
-    #createDir(projectpathst)     # why needed?
     echo "\p----------------------"
     echo "Using active (starred) project: " & activeprojectst
     echo "Project-path: " & projectpathst
@@ -2216,7 +2295,9 @@ proc prepAndRunBatches(batchfilepathst: string; minlengthit = 0, fuzzypercentit 
   var filepathst: string
   filepathst = "batch_comparisons" / baseName($extractFilename(batchfilepathst)) & ".bacomp"
 
-  runBatchComparison(filepathst, projectpathst)
+  var myskiplisq: seq[string] = createSkipList(noisefilepartst)
+
+  runBatchComparison(filepathst, projectpathst, myskiplisq)
 
 
 
@@ -2247,6 +2328,8 @@ proc processCommandLine() =
     internalcompbo: bool = false
     batchfilepathst: string = ""
     intwordcountit: int = 0
+    noisefilepartst: string = ""
+
 
   skipta["e"] = skipEchoFileInsertions
   skipta["echo_file_insertions"] = skipEchoFileInsertions
@@ -2301,6 +2384,13 @@ proc processCommandLine() =
           else:
             echo "Performing basic (two-part) internal comparison.."
 
+        of "n", "noisefile":
+          if val != "":
+            noisefilepartst = val
+            echo "Using noise-file-part: " & noisefilepartst
+          else:
+            echo "You entered the key for noise-file-part (-n), but no value (like: -n:english_generic). \pIgnoring noise-file..."
+
 
         of "l", "length-minimum":
           if val != "" and val.all(isDigit):
@@ -2339,7 +2429,7 @@ proc processCommandLine() =
     of "echoHelpInfo":
       echoHelpInfo()
     of "prepAndRunBatches":
-      prepAndRunBatches(batchfilepathst, lengthit, fuzzypercentit, boundary_lengthit, intwordcountit = intwordcountit)
+      prepAndRunBatches(batchfilepathst, lengthit, fuzzypercentit, boundary_lengthit, intwordcountit = intwordcountit, noisefilepartst = noisefilepartst)
 
 
   except IOError:

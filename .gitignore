@@ -20,12 +20,15 @@ mostfiles/*
 
 mostfiles/jolibs/generic/
 !mostfiles/jolibs/generic/g_templates.nim
+!mostfiles/jolibs/generic/g_mine.nim
+
 
 mostfiles/oud_spul/
 mostfiles/previous_comparisons/
 *.txt
 !01.txt
 !02.txt
+!whats_new_tof.txt
 
 *0.*.nim
 *1.*.nim

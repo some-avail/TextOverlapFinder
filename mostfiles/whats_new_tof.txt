@@ -1,7 +1,10 @@
 What's new in TextOverlapFinder
 
+2.36
+-added exclusion of noisewords (thru option -n)
+
 2.35
--added advanced form of internal comparison
+-added advanced form of internal comparison (option -i:numofchars)
 (multi-chunk approach provides more accurate results)
 
 2.23
